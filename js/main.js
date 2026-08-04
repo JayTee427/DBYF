@@ -784,7 +784,7 @@ function updatePlaying(dt) {
   if (G.heatState === 3) speed *= 1.25;           // panic sprint
   if (G.heatState === 4) speed *= 1.35;
   const sy = Math.sin(p.yaw), cy = Math.cos(p.yaw);
-  const fx = -sy, fz = -cy, rx = -cy, rz = sy;
+  const fx = -sy, fz = -cy, rx = cy, rz = -sy;
   let dx = (fx * mz + rx * mx), dz = (fz * mz + rz * mx);
   const dl = Math.hypot(dx, dz);
   if (dl > 0) { dx /= dl; dz /= dl; }
