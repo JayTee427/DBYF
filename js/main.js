@@ -522,6 +522,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Space') e.preventDefault();
 });
 window.addEventListener('keyup', (e) => keys.delete(e.code));
+window.addEventListener('blur', () => keys.clear());  // lost keyups (alt-tab) would leave you drifting forever
 
 let pointerLocked = false, dragLook = false;
 renderer.domElement.addEventListener('click', () => {
