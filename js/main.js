@@ -64,7 +64,8 @@ const G = {
   state: 'title',   // title | playing | paused | end
   diff: DIFFS.local, diffKey: 'local',
   seed: 12345,
-  t: 0, dt: 0, runTime: 0,
+  t: 0, dt: 0, runTime: 0, levelTime: 0,
+  level: 1, totalScore: 0, levelMaxState: 0, levelAggroMax: false,
   feet: { L: 0, R: 0 }, planted: 'L',
   health: 100, heatState: 0, prevHeatState: 0,
   aggro: 0, aggroMaxed: false,
@@ -80,12 +81,17 @@ function freshStats() {
   return { hotSteps: 0, steps: 0, gullsDodged: 0, gullsHit: 0, itemsCollected: 0,
     maxL: 0, maxR: 0, maxState: 0, dist: 0, punts: 0, hotStreaks: 0, everAggroMax: false };
 }
+// per-level escalation: each cleared beach is hotter, angrier, stingier
+function effHeat() { return G.diff.heat * (1 + 0.12 * (G.level - 1)); }
+function effAggro() { return G.diff.aggro * (1 + 0.15 * (G.level - 1)); }
+function addPoints(n) { G.totalScore += Math.round(n * G.diff.mult); }
 
 // ---------------- DOM refs ----------------
 const $ = (id) => document.getElementById(id);
 const dom = {
   title: $('title'), pause: $('pause'), end: $('end'), hud: $('hud'),
-  seedlabel: $('seedlabel'), goallabel: $('goallabel'), timelabel: $('timelabel'),
+  seedlabel: $('seedlabel'), goallabel: $('goallabel'), timelabel: $('timelabel'), scorelabel: $('scorelabel'),
+  interlevel: $('interlevel'), ilTitle: $('il-title'), ilLines: $('il-lines'), ilNext: $('il-next'),
   lfoot: $('lfoot').querySelector('.gfill'), rfoot: $('rfoot').querySelector('.gfill'),
   lfootT: $('lfoot-t'), rfootT: $('rfoot-t'),
   health: $('health').querySelector('.gfill'), aggro: $('aggro').querySelector('.gfill'),
@@ -276,7 +282,7 @@ function updateSandColors(t) {
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), z = pos.getZ(i);
     const w = wetnessAt(z, t);
-    const hn = clamp((sandHeat(x, z) - 0.4) / 0.75, 0, 1) * G.diff.heat;
+    const hn = clamp((sandHeat(x, z) - 0.4) / 0.75, 0, 1) * effHeat();
     const h = clamp(hn * 1.35, 0, 1);
     let r = lerp(COL_PALE[0], COL_HOT[0], h), g = lerp(COL_PALE[1], COL_HOT[1], h), b = lerp(COL_PALE[2], COL_HOT[2], h);
     r = lerp(r, COL_WET[0], w); g = lerp(g, COL_WET[1], w); b = lerp(b, COL_WET[2], w);
@@ -424,12 +430,12 @@ function generateLevel() {
   // items
   let ix = START_X + 10;
   while (ix < TRUCK_X - 12) {
-    ix += (13 + rng() * 9) / G.diff.itemRate;
+    ix += (13 + rng() * 9) * (1 + 0.08 * (G.level - 1)) / G.diff.itemRate;
     G.items.push(buildItem(pickItemKey(rng), ix, -7 + rng() * 19));
   }
   truck = buildTruck(); levelGroup.add(truck);
   lastWet.fill(-999);
-  dom.seedlabel.textContent = 'BEACH #' + G.seed;
+  dom.seedlabel.textContent = 'LV ' + G.level + ' — BEACH #' + G.seed;
 }
 
 // ---------------- gull ----------------
@@ -471,7 +477,7 @@ function updateGull(dt) {
     gl.resolved = true;
     const d = Math.hypot(player.x - gl.target.x, player.z - gl.target.z);
     if (hasItem('spinach')) {
-      AU.thwack(); addToast('GULL PUNTED! +150'); G.stats.punts++; say('POW', true);
+      AU.thwack(); addToast('GULL PUNTED! +150'); G.stats.punts++; addPoints(150); say('POW', true);
       gl.exit.y = 30; // flung
     } else if (d < 2.6) {
       if (G.slots.length > 0) {
@@ -483,7 +489,7 @@ function updateGull(dt) {
       }
       G.stats.gullsHit++;
     } else {
-      G.stats.gullsDodged++; addToast('DODGED! +150');
+      G.stats.gullsDodged++; addToast('DODGED! +150'); addPoints(150);
     }
   }
 }
@@ -576,7 +582,7 @@ function addItemToSlots(key) {
     const ejected = G.slots.shift();
     addToast('↻ rotated out: ' + ejected.def.name, true); AU.poof();
   }
-  G.stats.itemsCollected++;
+  G.stats.itemsCollected++; addPoints(40);
   AU.pickup(); addToast('+ ' + def.emoji + ' ' + def.name);
   if (key === 'pizza') { G.health = Math.min(100, G.health + 30); addToast('+30 HP (delicious, dangerous)'); }
   if (key === 'spinach') { AU.shanty(); say('SPINACH TIME', true); }
@@ -600,6 +606,7 @@ function addToast(text, bad) {
 function startRun(diffKey) {
   G.diffKey = diffKey; G.diff = DIFFS[diffKey];
   G.state = 'playing'; G.runTime = 0; G.won = false;
+  G.level = 1; G.totalScore = 0; G.levelTime = 0; G.levelMaxState = 0; G.levelAggroMax = false;
   G.feet.L = 0; G.feet.R = 0; G.health = 100; G.heatState = 0; G.prevHeatState = 0;
   G.aggro = 0; G.slots = []; G.stats = freshStats(); G.hotStreak = 0;
   player.x = START_X; player.z = START_Z; player.yaw = -Math.PI / 2; player.pitch = -0.05;
@@ -638,73 +645,87 @@ function doneness(v) {
   if (v < 95) return 'CHARCOAL';
   return 'TECHNICALLY BRISKET';
 }
-function computeScore() {
-  const s = G.stats; let score = 0; const lines = [];
-  if (G.won) {
-    score += 2000; lines.push(['REACHED THE TRUCK', '+2000']);
-    const tb = Math.max(0, Math.round((150 - G.runTime) * 15));
-    if (tb > 0) { score += tb; lines.push(['SPEED BONUS', '+' + tb]); }
-    if (G.slots.length === 3) { score += 300; lines.push(['FULL POUCH', '+300']); }
-    if (hasItem('duck')) { score += 500; lines.push(['DUCK LOYALIST', '+500']); }
-    if (G.heatState >= 3) { score += 400; lines.push(['PHOTO FINISH', '+400']); }
-    if (s.maxState <= 1) { score += 800; lines.push(['COOL CUSTOMER', '+800']); }
-    if (!s.everAggroMax) { score += 500; lines.push(['PACIFIST', '+500']); }
-  } else {
-    const db = Math.round((player.x - START_X) * 2);
-    score += db; lines.push(['DISTANCE CONSOLATION', '+' + db]);
-  }
-  score += s.gullsDodged * 150; if (s.gullsDodged) lines.push(['GULLS DODGED ×' + s.gullsDodged, '+' + s.gullsDodged * 150]);
-  score += s.punts * 150; if (s.punts) lines.push(['GULLS PUNTED ×' + s.punts, '+' + s.punts * 150]);
-  score += s.hotStreaks * 150; if (s.hotStreaks) lines.push(['HOT STREAKS ×' + s.hotStreaks, '+' + s.hotStreaks * 150]);
-  score += s.itemsCollected * 40; if (s.itemsCollected) lines.push(['BEACHCOMBING ×' + s.itemsCollected, '+' + s.itemsCollected * 40]);
-  score = Math.round(score * G.diff.mult);
-  lines.push(['DIFFICULTY ×' + G.diff.mult, G.diff.label]);
+function levelScore() {
+  let score = 2000; const lines = [['BEACH CLEARED', '+2000']];
+  const tb = Math.max(0, Math.round((150 - G.levelTime) * 15));
+  if (tb > 0) { score += tb; lines.push(['SPEED BONUS', '+' + tb]); }
+  if (G.slots.length === 3) { score += 300; lines.push(['FULL POUCH', '+300']); }
+  if (hasItem('duck')) { score += 500; lines.push(['DUCK LOYALIST', '+500']); }
+  if (G.heatState >= 3) { score += 400; lines.push(['PHOTO FINISH', '+400']); }
+  if (G.levelMaxState <= 1) { score += 800; lines.push(['COOL CUSTOMER', '+800']); }
+  if (!G.levelAggroMax) { score += 500; lines.push(['PACIFIST', '+500']); }
+  const mult = G.diff.mult * (1 + 0.1 * (G.level - 1));
+  score = Math.round(score * mult);
+  lines.push(['LEVEL ' + G.level + ' × ' + G.diff.label, '×' + mult.toFixed(1)]);
   return { score, lines };
 }
-function endRun(won) {
-  G.won = won; G.state = 'end';
+function levelComplete() {
+  G.state = 'interlevel';
+  const { score, lines } = levelScore();
+  G.totalScore += score;
+  dom.ilTitle.textContent = 'BEACH #' + G.seed + ' CLEARED!';
+  dom.ilLines.innerHTML = lines.map(l => '<div class="rline"><span>' + l[0] + '</span><span>' + l[1] + '</span></div>').join('')
+    + '<div class="rline"><span>TOTAL</span><span>' + G.totalScore + '</span></div>';
+  dom.ilNext.textContent = 'LEVEL ' + (G.level + 1) + ' — THE SAND GROWS ANGRIER';
+  dom.interlevel.classList.remove('hidden');
+  AU.fanfare();
+  say(['one ice cream, please.', 'sweet relief. NEXT BEACH.', 'my feet thank you. onward.'][Math.floor(Math.random() * 3)], true);
+  setTimeout(nextLevel, 3400);
+}
+function nextLevel() {
+  if (G.state !== 'interlevel') return;
+  G.level++; G.levelTime = 0; G.levelMaxState = 0; G.levelAggroMax = false;
+  G.feet.L = 0; G.feet.R = 0;                       // the ice cream break: feet fully cooled
+  G.health = Math.min(100, G.health + 20);
+  G.aggro = 0; G.hotStreak = 0;
+  player.x = START_X; player.z = START_Z;
+  player.vx = 0; player.vz = 0; player.vy = 0; player.grounded = true;
+  generateLevel();
+  dom.interlevel.classList.add('hidden');
+  G.state = 'playing';
+}
+function endRun() {
+  G.state = 'end';
   if (document.exitPointerLock) document.exitPointerLock();
   const s = G.stats;
-  const { score, lines } = computeScore(); G.score = score;
-  dom.verdict.textContent = won ? 'SWEET RELIEF' : 'YOUR FEET GAVE OUT';
-  dom.verdict.className = won ? 'won' : 'burned';
-  dom.epitaph.textContent = won
-    ? ['The ice cream understands you now.', 'The truck driver saw everything. He is proud.', 'Somewhere, a seal claps.'][Math.floor(Math.random() * 3)]
-    : ['Here lie two feet. They were told to bring sandals.', 'The sand remains undefeated.', 'The gulls will sing of this day.'][Math.floor(Math.random() * 3)];
+  const consolation = Math.round((player.x - START_X) * 2 * G.diff.mult);
+  G.totalScore += consolation;
+  G.score = G.totalScore;
+  dom.verdict.textContent = 'YOUR FEET GAVE OUT';
+  dom.verdict.className = 'burned';
+  dom.epitaph.textContent = ['Here lie two feet. They were told to bring sandals.', 'The sand remains undefeated.', 'The gulls will sing of this day.'][Math.floor(Math.random() * 3)];
   // report card
   dom.rlines.innerHTML = '';
   const rep = [
+    ['Beaches cleared', G.level - 1], ['Fell on level', G.level],
     ['Left foot', doneness(s.maxL)], ['Right foot', doneness(s.maxR)],
     ['Steps on hot sand', s.hotSteps], ['Total steps', s.steps],
     ['Gulls dodged', s.gullsDodged], ['Gulls... not dodged', s.gullsHit],
-    ['Items beachcombed', s.itemsCollected], ['Time', G.runTime.toFixed(1) + 's'],
-    ['Diagnosis', won ? 'inadvisable, but successful' : 'why did you do this'],
+    ['Items beachcombed', s.itemsCollected], ['Total time', G.runTime.toFixed(1) + 's'],
+    ['Diagnosis', G.level > 1 ? 'a legend, briefly' : 'why did you do this'],
   ];
   for (const [k, v] of rep) {
     const d = document.createElement('div'); d.className = 'rline';
     d.innerHTML = '<span>' + k + '</span><span>' + v + '</span>'; dom.rlines.appendChild(d);
   }
-  for (const [k, v] of lines) {
-    const d = document.createElement('div'); d.className = 'rline bonus';
-    d.innerHTML = '<span>' + k + '</span><span>' + v + '</span>'; dom.rlines.appendChild(d);
-  }
+  const d = document.createElement('div'); d.className = 'rline bonus';
+  d.innerHTML = '<span>DISTANCE CONSOLATION</span><span>+' + consolation + '</span>'; dom.rlines.appendChild(d);
   // animated score tally
   dom.scoreline.textContent = 'SCORE: 0';
-  let shown = 0; const step = Math.max(1, Math.round(score / 40));
+  let shown = 0; const step = Math.max(1, Math.round(G.score / 40));
   const iv = setInterval(() => {
-    shown = Math.min(score, shown + step);
+    shown = Math.min(G.score, shown + step);
     dom.scoreline.textContent = 'SCORE: ' + shown; AU.tick();
-    if (shown >= score) clearInterval(iv);
+    if (shown >= G.score) clearInterval(iv);
   }, 40);
   // high score?
-  initialsActive = qualifies(score);
+  initialsActive = qualifies(G.score);
   if (initialsActive) {
     dom.initials.classList.remove('hidden');
     initialsIdx = 0; initialsChars = ['A', 'A', 'A']; renderInitials();
   } else dom.initials.classList.add('hidden');
   dom.end.classList.remove('hidden');
-  if (won) { AU.fanfare(); say('sweet, sweet relief.', true); }
-  else { AU.sad(); say('tell my shoes... I loved them.', true); }
+  AU.sad(); say('tell my shoes... I loved them.', true);
 }
 
 // ---------------- high scores ----------------
@@ -771,7 +792,7 @@ const HEAT_NAMES = ['COMFY', 'TOASTY', 'OW OW OW', 'BURNING', 'ON FIRE'];
 function footState(v) { return v < 25 ? 0 : v < 45 ? 1 : v < 70 ? 2 : v < 90 ? 3 : 4; }
 
 function updatePlaying(dt) {
-  G.runTime += dt;
+  G.runTime += dt; G.levelTime += dt;
   const p = player;
   // ---- movement
   p.sprint = keys.has('ShiftLeft') || keys.has('ShiftRight');
@@ -841,7 +862,7 @@ function updatePlaying(dt) {
     const h = heatAt(p.x, p.z, G.t);
     if (h < 0.3) { rateL = rateR = -10 - coolBonus; }
     else {
-      const base = (h - 0.3) * 26 * G.diff.heat * resist;
+      const base = (h - 0.3) * 26 * effHeat() * resist;
       if (moving) {
         rateL = G.planted === 'L' ? base * 0.75 : base * 0.3;
         rateR = G.planted === 'R' ? base * 0.75 : base * 0.3;
@@ -857,6 +878,7 @@ function updatePlaying(dt) {
   const maxF = Math.max(G.feet.L, G.feet.R);
   G.heatState = footState(maxF);
   G.stats.maxState = Math.max(G.stats.maxState, G.heatState);
+  G.levelMaxState = Math.max(G.levelMaxState, G.heatState);
   if (G.heatState > G.prevHeatState && G.heatState >= 1) {
     const lines = OW_LINES[G.heatState - 1];
     say(lines[Math.floor(Math.random() * lines.length)]);
@@ -880,13 +902,13 @@ function updatePlaying(dt) {
   else if (p.z < waveReachNow + 2.5) aggroRate = 14;
   else aggroRate = -7;
   if (aggroRate > 0) {
-    aggroRate *= G.diff.aggro;
+    aggroRate *= effAggro();
     if (hasItem('pizza')) aggroRate *= 2.5;
   }
   if (hasItem('spinach')) aggroRate = Math.min(aggroRate, -10);
   G.aggro = clamp(G.aggro + aggroRate * dt, 0, 100);
   if (G.aggro >= 100 && !G.gull) {
-    G.stats.everAggroMax = true;
+    G.stats.everAggroMax = true; G.levelAggroMax = true;
     spawnGull(); G.aggro = 35;
   }
   updateGull(dt);
@@ -912,15 +934,15 @@ function updatePlaying(dt) {
   const h = inWater || onRefuge ? 0 : heatAt(p.x, p.z, G.t);
   if (moving && p.sprint && h > 0.55) {
     G.hotStreak += speed * dt;
-    if (G.hotStreak > 28) { G.hotStreak = 0; addToast('HOT STREAK! +150'); G.stats.hotStreaks++; }
+    if (G.hotStreak > 28) { G.hotStreak = 0; addToast('HOT STREAK! +150'); G.stats.hotStreaks++; addPoints(150); }
   } else G.hotStreak = 0;
 
   // ---- goal + jingle
   const truckDist = Math.hypot(TRUCK_X - p.x, TRUCK_Z - p.z);
   AU.jingle(truckDist);
   dom.goallabel.textContent = '\u{1F366} ICE CREAM TRUCK: ' + Math.max(0, Math.round(truckDist)) + 'm';
-  if (truckDist < 6) { endRun(true); return; }
-  if (G.health <= 0) { endRun(false); return; }
+  if (truckDist < 6) { levelComplete(); return; }
+  if (G.health <= 0) { endRun(); return; }
 
   // ---- camera
   const wobble = G.heatState >= 3 ? Math.sin(G.t * 7) * 0.05 * (G.heatState - 2) : 0;
@@ -941,7 +963,8 @@ function updateHUD() {
   dom.heatstate.className = 's' + G.heatState;
   dom.smoke.className = G.heatState === 4 ? 'on' : '';
   dom.vignette.style.opacity = clamp((Math.max(G.feet.L, G.feet.R) - 60) / 40, 0, 1) * 0.85;
-  dom.timelabel.textContent = G.runTime.toFixed(1) + 's';
+  dom.timelabel.textContent = G.levelTime.toFixed(1) + 's';
+  dom.scorelabel.textContent = 'SCORE ' + G.totalScore;
   dom.slots.forEach((el, i) => {
     const s = G.slots[i];
     if (!s) { el.className = 'slot empty'; el.innerHTML = 'EMPTY'; return; }
@@ -968,7 +991,7 @@ function updateAttract(t) {
 seedNoise(G.seed);
 generateLevel();
 renderHighscores();
-window.DBYF = { G, player };  // debug/cheat handle ("I'm not mad, I'm impressed" — the Sun)
+window.DBYF = { G, player, levelComplete, nextLevel, endRun };  // debug/cheat handle ("I'm not mad, I'm impressed" — the Sun)
 const clock = new THREE.Clock();
 let colorTimer = 0;
 function loop() {

@@ -53,6 +53,15 @@
   #pause h2{font-size:34px;letter-spacing:.2em;margin-bottom:10px;}
   #pause p{font-size:13px;color:#ffe9bf;}
 
+  /* ---------- level clear ---------- */
+  #interlevel{background:rgba(8,6,14,0.6);}
+  #il-title{font-size:clamp(24px,5vw,46px);color:#8affc1;letter-spacing:.12em;
+    text-shadow:0 0 20px #00ff88,3px 3px 0 #005522;margin-bottom:14px;animation:pulse 1.2s infinite;}
+  #il-lines{background:var(--panel);border:3px solid var(--line);padding:12px 24px;min-width:360px;margin-bottom:14px;}
+  #il-lines .rline{display:flex;justify-content:space-between;font-size:14px;padding:2px 0;color:#8affc1;gap:30px;}
+  #il-lines .rline span:last-child{color:#fff;}
+  #il-next{font-size:14px;color:#ffdf9e;letter-spacing:.2em;animation:blink 1.1s steps(2) infinite;}
+
   /* ---------- end / report card ---------- */
   #end{background:rgba(8,6,14,0.72);}
   #verdict{font-size:clamp(22px,4.5vw,44px);letter-spacing:.1em;margin-bottom:4px;text-shadow:3px 3px 0 #7a2d00;}
@@ -155,6 +164,13 @@
     <p>CLICK TO RESUME &mdash; your feet appreciate the break</p>
   </div>
 
+  <!-- ============ LEVEL CLEAR ============ -->
+  <div id="interlevel" class="screen hidden">
+    <div id="il-title">BEACH CLEARED!</div>
+    <div id="il-lines"></div>
+    <div id="il-next">LEVEL 2 — THE SAND GROWS ANGRIER</div>
+  </div>
+
   <!-- ============ END ============ -->
   <div id="end" class="screen hidden">
     <div id="verdict">SWEET RELIEF</div>
@@ -184,6 +200,7 @@
       <span id="seedlabel">BEACH #00000</span>
       <span id="goallabel">&#127846; ICE CREAM TRUCK: 300m</span>
       <span id="timelabel">0.0s</span>
+      <span id="scorelabel">SCORE 0</span>
     </div>
     <div class="gaugebox">
       <div class="glabel"><span>LEFT FOOT</span><span id="lfoot-t">COMFY</span></div>
@@ -210,6 +227,6 @@
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js" } }
 </script>
-<script type="module" src="js/main.js?v=0.1.2"></script>
+<script type="module" src="js/main.js?v=0.2.0"></script>
 </body>
 </html>
