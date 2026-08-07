@@ -1,5 +1,11 @@
 # DON'T BURN YOUR FEET
-*A first-person beach survival comedy. The sand is lava. The birds are watching. The ice cream truck is so far away.*
+*A beach survival comedy. The sand is lava. The birds are watching. The ice cream truck is so far away.*
+
+> **Camera note (v1.0):** built third-person, not first-person. The game is about
+> your feet and about reading the beach — in first person you can't see either,
+> you can't judge a landing on a 2m plank, and the whole hop/scout/commit loop
+> collapses into holding W. Third-person puts the heat gauge on the character
+> (feet visibly cook) and makes routes legible.
 
 ## Core loop
 **Hop → Scout → Commit.** Stand on something safe, read the beach ahead, sprint across hot sand to the next refuge (or the wash line). Everything else in the game decorates this loop.
