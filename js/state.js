@@ -3,30 +3,34 @@
 // ============================================================
 
 export const DIFFS = {
-  tourist:    { label: 'TOURIST',    heat: 0.62, aggro: 0.55, loot: 1.30, mult: 1.0, birdDmg: 6,  stam: 1.4 },
-  local:      { label: 'LOCAL',      heat: 1.00, aggro: 1.00, loot: 1.00, mult: 1.6, birdDmg: 10, stam: 1.0 },
-  firewalker: { label: 'FIREWALKER', heat: 1.32, aggro: 1.50, loot: 0.80, mult: 2.6, birdDmg: 14, stam: 0.85 },
-  august:     { label: 'BAREFOOT IN AUGUST', heat: 1.70, aggro: 2.10, loot: 0.62, mult: 4.2, birdDmg: 18, stam: 0.7 },
+  // `lava` scales how much of the beach is scorching, so difficulty changes the
+  // level layout you see — not just hidden multipliers
+  tourist:    { label: 'TOURIST',    heat: 0.50, aggro: 0.45, loot: 1.30, mult: 1.0, birdDmg: 5,  stam: 1.4, lava: 0.55 },
+  local:      { label: 'LOCAL',      heat: 0.95, aggro: 0.85, loot: 1.00, mult: 1.6, birdDmg: 8,  stam: 1.1, lava: 1.00 },
+  firewalker: { label: 'FIREWALKER', heat: 1.20, aggro: 1.40, loot: 0.82, mult: 2.6, birdDmg: 13, stam: 0.9, lava: 1.30 },
+  august:     { label: 'BAREFOOT IN AUGUST', heat: 1.65, aggro: 2.00, loot: 0.65, mult: 4.2, birdDmg: 18, stam: 0.75, lava: 1.60 },
 };
 
-// world bounds
+// world bounds — a short, snappy arcade run, not a hike
 export const W = {
   xMin: -105, xMax: 105,
   zOcean: -26, zMin: -17, zMax: 32,
-  startX: -96, startZ: 4,
-  goalX: 94,
+  startX: -58, startZ: 4,
+  goalX: 58,
 };
 
 // heat tuning
 export const HEAT = {
-  safe: 0.40,          // below this, sand is comfortable
-  burnRate: 58,        // per second at h=1.4 on the planted foot
-  coolRefuge: -46,
-  coolWater: -78,
-  coolWet: -20,
-  coolShade: -14,
-  coolCool: -9,
-  coolAir: -5,
+  safe: 0.44,          // below this, sand is comfortable
+  burnRate: 48,        // lava hurts — but you can see every patch coming
+  coolRefuge: -72,     // a fast bounce, not a rest stop — keeps the tempo up
+  coolWater: -95,      // the full reset, if you dare stand in the birds' pantry
+  coolWet: -22,
+  coolShade: -15,
+  coolCool: -4.5,      // plain sand is survivable, not restorative — that's what
+                       // makes refuges, wet sand and shade worth routing through
+  coolAir: -4,
+  cookedAt: 80,        // a foot past this breaks your SOLE TRAIN
 };
 
 export const STAM = {
@@ -43,6 +47,7 @@ export const S = {
   heatState: 0, prevHeatState: 0,
   slots: [],
   score: 0, levelBanked: 0,
+  combo: 0, comboT: 0,
   stats: null,
   refuges: [], items: [], birds: [], props: [], fx: [],
   ev: null,
@@ -56,13 +61,14 @@ export function freshStats() {
   return {
     steps: 0, hotSteps: 0, refugesUsed: 0, dodges: 0, hits: 0,
     items: 0, crabs: 0, punts: 0, maxL: 0, maxR: 0, maxState: 0,
-    scouts: 0, waterTime: 0, cleanLevel: true, pacifist: true,
+    scouts: 0, waterTime: 0, leaps: 0, bestCombo: 0, cleanLevel: true, pacifist: true,
   };
 }
 
 export const HEAT_NAMES = ['COMFY', 'TOASTY', 'OW OW OW', 'BURNING', 'ON FIRE'];
 export function footState(v) { return v < 25 ? 0 : v < 48 ? 1 : v < 70 ? 2 : v < 90 ? 3 : 4; }
 
-export function effHeat() { return S.diff.heat * (S.weather ? S.weather.heat : 1) * (1 + 0.09 * (S.level - 1)); }
-export function effAggro() { return S.diff.aggro * (S.weather ? S.weather.aggro : 1) * (1 + 0.11 * (S.level - 1)); }
+// escalation comes mostly from more lava patches, so the per-level heat ramp is gentle
+export function effHeat() { return S.diff.heat * (S.weather ? S.weather.heat : 1) * (1 + 0.045 * (S.level - 1)); }
+export function effAggro() { return S.diff.aggro * (S.weather ? S.weather.aggro : 1) * (1 + 0.08 * (S.level - 1)); }
 export function hasItem(k) { return S.slots.some(s => s.key === k); }

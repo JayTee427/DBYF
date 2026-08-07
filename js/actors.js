@@ -131,13 +131,14 @@ export class Runner {
     this.facing = 0; this.grounded = true;
     this.phase = 0; this.speed = 0; this.squash = 1;
     this.refuge = null; this.stepFlip = 1;
-    this.vaultT = 0;
+    this.vaultT = 0; this.hopCool = 0; this.leapT = -99; this.airTime = 0;
   }
 
   reset() {
     this.x = W.startX; this.z = W.startZ; this.y = groundY(this.x, this.z);
     this.vy = 0; this.kx = 0; this.kz = 0; this.facing = Math.PI / 2;
     this.grounded = true; this.phase = 0; this.speed = 0; this.refuge = null;
+    this.hopCool = 0; this.airTime = 0;
   }
 
   /** ground height here, including whatever you're standing on */
@@ -202,11 +203,26 @@ export class Runner {
     // ---- vertical
     const { y: gy, ref } = this.sample(this.x, this.z);
     this.refuge = this.grounded ? ref : this.refuge;
-    if (this.grounded && input.jump) {
-      this.vy = 5.6; this.grounded = false; AU.hop();
-      this.squash = 0.82;
-      particles.burst(this.x, gy + 0.05, this.z, 4, { color: 0xf0dcae, size: 0.3, ttl: 0.5, vy: 0.8, spread: 0.9 });
+    if (this.grounded && input.jump && this.hopCool <= 0) {
+      // A sprinting jump is a LEAP: long, costly, and the only way over a
+      // wide scorch band. A standing tap is a quick hop that swaps your lead
+      // foot — the one bit of direct control over the per-foot gauges.
+      const leaping = wantSprint && S.stamina > 18 && mag > 0;
+      if (leaping) {
+        this.vy = 6.4;
+        this.kx += wishX * 12; this.kz += wishZ * 12;
+        S.stamina = clamp(S.stamina - 16, 0, STAM.max);
+        this.leapT = S.t; S.stats.leaps++;
+        AU.sweep(300, 620, 0.22, 'triangle', 0.13);
+      } else {
+        this.vy = 5.4; AU.hop();
+      }
+      S.plant = S.plant === 'L' ? 'R' : 'L';   // hop to rest the cooking foot
+      this.grounded = false; this.hopCool = 0.12; this.squash = 0.82;
+      particles.burst(this.x, gy + 0.05, this.z, leaping ? 7 : 4,
+        { color: 0xf0dcae, size: 0.3, ttl: 0.5, vy: 0.8, spread: leaping ? 1.6 : 0.9 });
     }
+    this.hopCool -= dt;
     if (!this.grounded) {
       this.vy -= 15.5 * dt;
       this.y += this.vy * dt;
@@ -239,6 +255,22 @@ export class Runner {
 
   onRefugeLand(ref) {
     S.stats.refugesUsed++;
+    // SOLE TRAIN: every fresh refuge you reach without cooking a foot extends
+    // the chain. This is what turns "walk on the pale bits" into route-running.
+    if (!ref.used) {
+      ref.used = true;
+      S.combo++;
+      S.comboT = S.t;
+      const pts = 60 * S.combo;
+      addScore(pts);
+      if (S.combo >= 2) {
+        toast('SOLE TRAIN ×' + S.combo + '  +' + pts);
+        AU.tone(520 + Math.min(S.combo, 10) * 70, 0.09, 'square', 0.13);
+      }
+      S.stats.bestCombo = Math.max(S.stats.bestCombo, S.combo);
+      // a clean landing is worth stamina — it keeps the tempo up
+      S.stamina = clamp(S.stamina + 12, 0, STAM.max);
+    }
     if (ref.type === 'towel' && ref.crab && !ref.crabSprung) {
       ref.crabSprung = true; S.stats.crabs++;
       S.health -= 6; this.kx += (Math.random() - 0.5) * 8; this.kz += 5;
@@ -502,19 +534,35 @@ function gullMesh(scale = 1) {
   return g;
 }
 
+/** A telegraphed strike: the shadow shows exactly where it will land, so
+ *  getting hit is always a read you lost, never a dice roll. */
+function strikeShadow(x, z) {
+  const m = new THREE.Mesh(new THREE.CircleGeometry(2.6, 22),
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }));
+  m.rotation.x = -Math.PI / 2;
+  m.position.set(x, groundY(x, z) + 0.06, z);
+  m.renderOrder = 6;
+  scene.add(m);
+  return m;
+}
 export function spawnGullRaid(runner) {
   const n = S.level >= 5 ? 3 : S.level >= 3 ? 2 : 1;
   for (let i = 0; i < n; i++) {
     const m = gullMesh(1); scene.add(m);
+    // aim ahead of where the runner is going — you must break your line to dodge
+    const lead = 1.1 + i * 0.5;
+    const tx = runner.x + Math.sin(runner.facing) * runner.speed * lead * 0.35 + (i - 1) * 2.2;
+    const tz = runner.z + Math.cos(runner.facing) * runner.speed * lead * 0.35;
     S.birds.push({
-      kind: 'gull', mesh: m, t: -i * 0.45, dur: 2.3, resolved: false,
-      from: new THREE.Vector3(runner.x - 16 - i * 5, 12 + i * 2, runner.z - 22),
-      to: new THREE.Vector3(runner.x + i * 1.6, runner.y + 1.0, runner.z + i * 0.8),
-      exit: new THREE.Vector3(runner.x + 26, 15, runner.z - 26),
+      kind: 'gull', mesh: m, t: -i * 0.5, dur: 2.6, resolved: false,
+      shadow: strikeShadow(tx, tz),
+      from: new THREE.Vector3(runner.x - 18 - i * 5, 13 + i * 2, runner.z - 24),
+      to: new THREE.Vector3(tx, groundY(tx, tz) + 0.9, tz),
+      exit: new THREE.Vector3(runner.x + 28, 16, runner.z - 28),
     });
   }
-  AU.screech();
-  toast('\u{1F426} INCOMING!', 'bad');
+  AU.screech(); AU.gullCall();
+  toast('\u{1F426} INCOMING — MOVE!', 'bad');
 }
 
 export function spawnFalcon(runner) {
@@ -535,7 +583,16 @@ export function updateBirds(dt, runner) {
     if (b.kind === 'gull') {
       b.t += dt / b.dur;
       if (b.t < 0) continue;
-      if (b.t >= 1) { scene.remove(b.mesh); S.birds.splice(S.birds.indexOf(b), 1); continue; }
+      if (b.shadow) {   // tightens and darkens as the strike closes in
+        const k = clamp(b.t / 0.46, 0, 1);
+        b.shadow.scale.setScalar(lerp(1.5, 0.85, k));
+        b.shadow.material.opacity = b.resolved ? Math.max(0, 0.35 - (b.t - 0.46) * 1.4)
+          : 0.2 + 0.28 * k + 0.1 * Math.sin(S.t * 18);
+      }
+      if (b.t >= 1) {
+        scene.remove(b.mesh); if (b.shadow) scene.remove(b.shadow);
+        S.birds.splice(S.birds.indexOf(b), 1); continue;
+      }
       const p = new THREE.Vector3();
       if (b.t < 0.5) { const u = b.t / 0.5; p.lerpVectors(b.from, b.to, u); p.y = lerp(b.from.y, b.to.y, u * u); }
       else { const u = (b.t - 0.5) / 0.5; p.lerpVectors(b.to, b.exit, u); p.y = lerp(b.to.y, b.exit.y, u * u); }
@@ -739,8 +796,9 @@ export function updateEvents(dt, runner) {
 export function generateLevel(runner) {
   while (levelGroup.children.length) levelGroup.remove(levelGroup.children[0]);
   S.refuges = []; S.items = []; S.fx = [];
-  for (const b of S.birds) { scene.remove(b.mesh); if (b.ring) scene.remove(b.ring); }
+  for (const b of S.birds) { scene.remove(b.mesh); if (b.ring) scene.remove(b.ring); if (b.shadow) scene.remove(b.shadow); }
   S.birds = [];
+  S.combo = 0;
   if (S.ev) {
     for (const c of S.ev.clouds) scene.remove(c.mesh);
     if (S.ev.focus) scene.remove(S.ev.focus.ring);

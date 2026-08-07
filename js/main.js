@@ -42,7 +42,7 @@ const D = {
   hp: $('hp'), stam: $('stam'), aggro: $('aggro'),
   slots: [$('s0'), $('s1'), $('s2')],
   state: $('heatstate'), toasts: $('toasts'), vig: $('vignette'), flash: $('flash'),
-  arrow: $('arrow'), scoutHint: $('scoutHint'),
+  arrow: $('arrow'), scoutHint: $('scoutHint'), combo: $('combo'),
   ilTitle: $('ilTitle'), ilLines: $('ilLines'), ilNext: $('ilNext'),
   verdict: $('verdict'), epitaph: $('epitaph'), card: $('card'), finalScore: $('finalScore'),
   initials: $('initials'), cells: [$('c0'), $('c1'), $('c2')], hs: $('hsrows'),
@@ -68,6 +68,9 @@ addEventListener('keydown', (e) => {
   keys.add(e.code);
   if (e.code === 'Space') e.preventDefault();
   if (e.code === 'KeyE') useItem();
+  if (e.code === 'KeyM') { const m = AU.toggleMute(); toast(m ? '🔇 MUTED' : '🔊 SOUND ON'); syncVolUI(); }
+  if (e.code === 'BracketLeft') { AU.setVolume(AU.volume - 0.1); syncVolUI(); }
+  if (e.code === 'BracketRight') { AU.setVolume(AU.volume + 0.1); syncVolUI(); }
   if (e.code === 'Escape' && S.mode === 'play') setPaused(true);
 });
 addEventListener('keyup', (e) => keys.delete(e.code));
@@ -102,6 +105,22 @@ addEventListener('wheel', (e) => {
   if (S.mode !== 'play') return;
   cam.dist = clamp(cam.dist + Math.sign(e.deltaY) * 0.7, 5, 14);
 }, { passive: true });
+
+// ---------------- volume control ----------------
+const volSlider = $('vol'), volLabel = $('volLabel');
+function syncVolUI() {
+  if (!volSlider) return;
+  volSlider.value = String(Math.round(AU.volume * 100));
+  volLabel.textContent = AU.muted ? 'MUTED' : Math.round(AU.volume * 100) + '%';
+}
+volSlider?.addEventListener('input', () => {
+  AU.muted = false;
+  AU.ensure(); AU.resume();
+  AU.setVolume(volSlider.value / 100);
+  syncVolUI();
+});
+$('muteBtn')?.addEventListener('click', () => { AU.ensure(); AU.toggleMute(); syncVolUI(); });
+syncVolUI();
 
 // ---------------- the runner ----------------
 const runner = new Runner();
@@ -185,7 +204,7 @@ function startRun(diffKey) {
   S.mode = 'play'; S.level = 1; S.score = 0; S.runTime = 0;
   S.feet.L = 0; S.feet.R = 0; S.health = 100; S.stamina = STAM.max;
   S.aggro = 0; S.slots = []; S.stats = freshStats(); S.tutorial = 0;
-  S.heatState = 0; S.prevHeatState = 0;
+  S.heatState = 0; S.prevHeatState = 0; S.combo = 0;
   clearRoute();
   generateLevel(runner);
   cam.yaw = -Math.PI / 2; cam.pitch = 0.30;
@@ -239,6 +258,10 @@ function levelComplete() {
   if (S.heatState >= 3) { sc += 500; lines.push(['PHOTO FINISH', '+500']); }
   if (S.stats.cleanLevel) { sc += 900; lines.push(['COOL CUSTOMER', '+900']); }
   if (S.stats.pacifist) { sc += 600; lines.push(['PACIFIST', '+600']); }
+  if (S.stats.bestCombo >= 3) {
+    const cb = S.stats.bestCombo * 150;
+    sc += cb; lines.push(['BEST SOLE TRAIN ×' + S.stats.bestCombo, '+' + cb]);
+  }
   const mult = S.diff.mult * (1 + 0.1 * (S.level - 1));
   sc = Math.round(sc * mult);
   S.score += sc;
@@ -299,6 +322,8 @@ function die() {
     ['Steps taken', s.steps],
     ['Steps on hot sand', s.hotSteps],
     ['Refuges used', s.refugesUsed],
+    ['Best SOLE TRAIN', '×' + s.bestCombo],
+    ['Desperate leaps', s.leaps],
     ['Birds dodged', s.dodges],
     ['Birds... not dodged', s.hits],
     ['Towel crabs met', s.crabs],
@@ -309,11 +334,12 @@ function die() {
   D.card.innerHTML = rows.map(r => `<div class="row"><span>${r[0]}</span><span>${r[1]}</span></div>`).join('')
     + `<div class="row bonus"><span>DISTANCE CONSOLATION</span><span>+${consolation}</span></div>`;
   D.finalScore.textContent = 'SCORE: 0';
-  let shown = 0;
+  let shown = 0, tickN = 0;
   const step = Math.max(1, Math.round(S.score / 45));
   const iv = setInterval(() => {
     shown = Math.min(S.score, shown + step);
-    D.finalScore.textContent = 'SCORE: ' + shown; AU.tick();
+    D.finalScore.textContent = 'SCORE: ' + shown;
+    if (tickN++ % 4 === 0) AU.tick();          // a gentle rattle, not a machine gun
     if (shown >= S.score) clearInterval(iv);
   }, 38);
   initialsOn = qualifies(S.score);
@@ -370,10 +396,11 @@ function commitInitials() {
 const TUTORIAL = [
   [2.0, 'WASD to run — mouse to look around'],
   [7.0, 'PALE sand is cool. ORANGE shimmering sand BURNS.'],
-  [13.0, 'Stand on driftwood, rocks and towels to cool your feet'],
-  [20.0, 'HOLD Q to SCOUT — rise up and plan your route'],
-  [28.0, 'SHIFT sprints, but stamina is limited. Rest on refuges.'],
-  [37.0, 'The water cools fastest — but the birds are watching'],
+  [13.0, 'HOLD Q to SCOUT — rise up and plan your route'],
+  [20.0, 'Land on driftwood & rocks to chain a SOLE TRAIN'],
+  [28.0, 'SPACE hops (no burning in mid-air) and swaps your lead foot'],
+  [36.0, 'SHIFT + SPACE = LEAP — clear a wide scorch band'],
+  [45.0, 'The water resets both feet — but the birds are watching'],
 ];
 
 // ---------------- simulation ----------------
@@ -431,6 +458,11 @@ function simulate(dt) {
   S.heatState = footState(worst);
   S.stats.maxState = Math.max(S.stats.maxState, S.heatState);
   if (S.heatState >= 2) S.stats.cleanLevel = false;
+  // cook a foot and the chain breaks — the cost of a bad line
+  if (worst > HEAT.cookedAt && S.combo > 0) {
+    if (S.combo >= 3) { toast('SOLE TRAIN BROKEN (×' + S.combo + ')', 'bad'); AU.reject(); }
+    S.combo = 0;
+  }
   if (S.heatState > S.prevHeatState && S.heatState >= 1) {
     const l = OW[S.heatState - 1]; say(l[Math.floor(Math.random() * l.length)]);
     if (S.heatState >= 3) cam.shake = 0.5;
@@ -441,25 +473,28 @@ function simulate(dt) {
   S.prevHeatState = S.heatState;
 
   // ---------- health ----------
-  for (const f of ['L', 'R']) if (S.feet[f] > 75) S.health -= (S.feet[f] - 75) / 25 * 5.5 * dt;
+  // health goes when a foot is genuinely cooked, and comes back when you cool off
+  for (const f of ['L', 'R']) if (S.feet[f] > 78) S.health -= (S.feet[f] - 78) / 22 * 6.0 * dt;
   if (S.heatState === 4) {
-    S.health -= 3.5 * dt;
+    S.health -= 4.0 * dt;
     if (hasItem('duck') && S.t - S.lastSqueak > 2.6) { S.lastSqueak = S.t; AU.squeak(); }
   }
-  if (worst < 25 && S.health < 100) S.health += 3.0 * dt;
+  if (worst < 25 && S.health < 100) S.health += 2.2 * dt;
   S.health = clamp(S.health, 0, 100);
 
   // ---------- bird aggro ----------
-  let ag;
-  if (inWater) ag = 24;
+  // Several things draw them in, so the birds are a live pressure everywhere
+  // on the beach — not a system you only meet if you paddle.
+  let ag = -8;
+  if (inWater) { ag = 26; S.stats.waterTime += dt; }
   else if (runner.z < waveZ + 3) ag = 15;
-  else ag = -8;
-  if (ag > 0) {
-    ag *= effAggro();
-    if (hasItem('pizza')) ag *= 2.4;
-    S.stats.waterTime += dt;
-  }
-  if (hasItem('spinach')) ag = Math.min(ag, -12);
+  if (S.heatState >= 4) ag += 15;                     // you smell like lunch
+  else if (S.heatState === 3) ag += 6;
+  if (hasItem('pizza')) ag += 12;
+  if (hasItem('cap')) ag -= 3;                        // harder to spot
+  if (ag > 0) ag *= effAggro();
+  if (hasItem('spinach')) ag = Math.min(ag, -14);
+  if (hasItem('hat')) ag *= 0.7;                      // a captain commands respect
   S.aggro = clamp(S.aggro + ag * dt, 0, 100);
   if (S.aggro >= 100 && S.birds.length === 0) {
     S.stats.pacifist = false;
@@ -564,6 +599,11 @@ function updateHUD() {
   D.lvl.textContent = 'LV ' + S.level + '  —  BEACH #' + S.seed;
   D.weather.textContent = S.weather.name;
   D.scoutHint.classList.toggle('hidden', S.mode === 'scout' || S.level > 1);
+  if (S.combo >= 2) {
+    D.combo.classList.remove('hidden');
+    D.combo.textContent = 'SOLE TRAIN ×' + S.combo;
+    D.combo.style.fontSize = Math.min(15 + S.combo * 1.6, 34) + 'px';
+  } else D.combo.classList.add('hidden');
 
   // goal arrow
   const dx = S.goal.x - runner.x, dz = S.goal.z - runner.z;
@@ -639,7 +679,7 @@ loop();
 
 // ---------------- debug / balance handle ----------------
 window.DBYF = {
-  S, runner, camera, cam, keys, input, renderer, scene,
+  S, runner, camera, cam, keys, input, renderer, scene, AU,
   levelComplete, die, nextLevel, generateLevel: () => generateLevel(runner),
   /** headless tick. `visual` does the expensive repaint; skip it for balance sims. */
   step(dt = 0.016, visual = true) {

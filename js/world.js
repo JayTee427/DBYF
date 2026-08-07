@@ -78,21 +78,39 @@ export function wetness(z, t) {
  * the sand's colour is drawn from the exact same numbers, so what you see is
  * literally what burns you.
  */
+const CELL = 15;
+export function blobDensity() {
+  // more and bigger patches as you climb — but never a wall-to-wall inferno
+  const lava = S.diff.lava ?? 1;
+  return clamp((0.24 + 0.07 * (S.level - 1)) * lava, 0, 0.86);
+}
+/** Discrete scorching patches. You can see each one coming and go around it. */
+function blobHeat(x, z) {
+  const density = blobDensity();
+  const cx = Math.floor(x / CELL), cz = Math.floor(z / CELL);
+  let hot = 0;
+  for (let i = -1; i <= 1; i++) {
+    for (let j = -1; j <= 1; j++) {
+      const gx = cx + i, gz = cz + j;
+      if (noise2(gx * 12.9 + 21.3, gz * 5.7 + 31.1) > density) continue;  // cell stays cool
+      const ox = noise2(gx * 7.3 + 0.7, gz * 3.1 + 1.9);
+      const oz = noise2(gx * 3.7 + 11.3, gz * 9.1 + 5.3);
+      const sz = noise2(gx * 5.1 + 41.7, gz * 7.9 + 17.3);
+      const bx = (gx + 0.18 + ox * 0.64) * CELL;
+      const bz = (gz + 0.18 + oz * 0.64) * CELL;
+      const rad = 3.4 + sz * 5.2;
+      const d = Math.hypot(x - bx, z - bz);
+      if (d < rad) hot = Math.max(hot, smoothstep(1, 0.5, d / rad));
+    }
+  }
+  return hot;
+}
 export function baseHeat(x, z) {
-  // Winding COOL CORRIDORS carved out of an otherwise scorching beach. The
-  // corridors meander, fork and pinch shut, so picking a line actually matters.
-  // The lane's centre-line snakes in z as you advance in x, so holding one
-  // heading walks you into a scorch zone — you have to keep re-reading it.
-  const warp = (noise2(x * 0.021 + 11, 4.1) - 0.5) * 15;
-  const warp2 = (noise2(x * 0.058 + 71, 8.3) - 0.5) * 4.5;
-  const band = Math.sin(z * 0.185 + warp + warp2);
-  // exponent > 1 keeps the cool lanes broad and walkable; the hot ridges
-  // between them stay narrow enough to sprint across on purpose
-  const corridor = 1 - Math.pow(Math.abs(band), 1.7);   // 1 in the middle of a cool lane
-  let h = 1.04 - corridor * 0.94;
-  h += (fbm(x * 0.06 + 41, z * 0.07 + 13) - 0.5) * 0.34;  // grain
-  h += smoothstep(2, 26, z) * 0.18;                 // dunes bake
-  h -= smoothstep(6, -4, z) * 0.10;                 // near the wash it's kinder
+  // Mostly pleasant sand, with puddles of lava in it.
+  let h = 0.14 + (fbm(x * 0.05 + 41, z * 0.06 + 13) - 0.5) * 0.16;
+  h += blobHeat(x, z) * 1.04;
+  h += smoothstep(6, 26, z) * 0.16;                 // dunes run warmer
+  h -= smoothstep(6, -4, z) * 0.08;                 // the wash is kind
   return clamp(h, 0.02, 1.6);
 }
 export function shadeAt(x, z) {
