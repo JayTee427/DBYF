@@ -53,7 +53,7 @@ export const S = {
   invuln: 0, invulnMax: 0, lastChant: 0, hitStop: 0, deathT: 0,
   stats: null,
   refuges: [], items: [], birds: [], props: [], fx: [], checkpoints: [],
-  coolPads: [], guilt: 0, prophet: null, readT: 0,
+  coolPads: [], guilt: 0, prophet: null, readT: 0, windDir: 0,
   ev: null,
   tutorial: 0,
   lastVoice: 0, lastNag: 0, lastSqueak: 0,

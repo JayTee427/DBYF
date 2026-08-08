@@ -172,6 +172,18 @@ export class Runner {
     if (S.heatState === 4) base *= 1.32;
     if (hasItem('sandals')) base *= 1.04;
     if (S.guilt > 0) base *= 0.78;                // moving slowly, full of regret
+    // the wind shoves you around in gusts you have to lean against
+    if (S.weather && S.weather.gust) {
+      const g = (Math.sin(S.t * 0.55) * 0.6 + Math.sin(S.t * 1.7 + 1.3) * 0.4);
+      const power = Math.max(0, g) * 7.5;
+      this.kx += Math.sin(S.windDir) * power * dt;
+      this.kz += Math.cos(S.windDir) * power * dt;
+      if (power > 5 && Math.random() < dt * 3) {
+        particles.spawn(this.x - Math.sin(S.windDir) * 2, this.y + 0.6 + Math.random(), this.z - Math.cos(S.windDir) * 2,
+          { color: 0xefdcb0, size: 0.24, ttl: 0.7, vy: 0.3,
+            vx: Math.sin(S.windDir) * 9, vz: Math.cos(S.windDir) * 9, opacity: 0.5, drag: 0.1 });
+      }
+    }
     if (S.ev && S.ev.escort > 0) base *= 1.06;    // the dolphins are rooting for you
     if (S.mode === 'scout') base = 0;
 
@@ -714,7 +726,7 @@ function cloudMesh() {
 export function freshEvents() {
   return {
     clouds: [], focus: null, surge: 0, nextAt: 10, dolphin: null, whale: null,
-    sneaker: false, warned: false,
+    sneaker: false, warned: false, lowTide: 0, civilwar: 0,
     props: [],            // sea lions, sandcastles, wedding, kite, detector man
     grunion: 0,           // while > 0 every bird ignores you
     escort: 0,            // dolphin escort buff timer
@@ -864,6 +876,72 @@ export function fireEvent(kind, runner) {
     const px = clamp(runner.x + 30 + Math.random() * 30, W.xMin, W.goalX - 14);
     addProp('wedding', g, px, clamp(6 + Math.random() * 12, 0, 20), { r: 5.5, crashed: false });
     toast('\u{1F492} somebody is getting married down there');
+
+  } else if (kind === 'detector') {
+    // sweeps the sand, headphones on, oblivious. wherever he digs, loot follows.
+    const g = new THREE.Group();
+    const body = meshOf(new THREE.CapsuleGeometry(0.3, 0.7, 4, 8), 0xc8b89a); body.position.y = 1.0; g.add(body);
+    const head = meshOf(new THREE.SphereGeometry(0.27, 10, 8), 0xe8c9a4); head.position.y = 1.65; g.add(head);
+    const cans = meshOf(new THREE.BoxGeometry(0.62, 0.16, 0.2), 0x2e2a30, { outlineScale: 1.1 });
+    cans.position.y = 1.7; g.add(cans);
+    const rod = meshOf(new THREE.CylinderGeometry(0.05, 0.05, 1.5, 5), 0xb0b6bd);
+    rod.rotation.z = 0.6; rod.position.set(0.55, 0.8, 0.35); g.add(rod);
+    const coil = meshOf(new THREE.CylinderGeometry(0.36, 0.36, 0.08, 12), 0x8d939a);
+    coil.position.set(1.05, 0.14, 0.6); g.add(coil);
+    const px = clamp(runner.x + 26 + Math.random() * 26, W.xMin, W.goalX - 16);
+    addProp('detector', g, px, clamp(6 + Math.random() * 12, -2, 20),
+      { dir: Math.random() < 0.5 ? 1 : -1, next: 3 + Math.random() * 3, digs: 0 });
+    toast('\u{1F575} the metal detector man. follow him.');
+
+  } else if (kind === 'volleyball') {
+    const ball = meshOf(new THREE.SphereGeometry(0.34, 12, 10), 0xfdfdfa);
+    const stripe = meshOf(new THREE.BoxGeometry(0.7, 0.09, 0.09), 0x3a76c4, { outline: false });
+    ball.add(stripe);
+    const a = Math.random() * Math.PI * 2;
+    addProp('volleyball', ball, runner.x + 16 + Math.random() * 12, clamp(runner.z + (Math.random() - 0.5) * 12, -4, 20),
+      { vx: Math.sin(a) * 6, vz: Math.cos(a) * 6, life: 22, kicked: false });
+    toast('\u{1F3D0} loose ball!');
+
+  } else if (kind === 'lowtide') {
+    // the sea walks out, exposing a huge cool flat — and then comes back
+    ev.surge -= 11; ev.lowTide = 15;
+    bus.banner('LOW TIDE', 'the sea pulls way out — go, go, go');
+    toast('\u{1F30A} a whole cool flat, briefly');
+    AU.sweep(500, 200, 1.1, 'sine', 0.06);
+
+  } else if (kind === 'civilwar') {
+    // one gull robs another and the entire flock forgets you exist
+    let n = 0;
+    for (const b of flock) {
+      if (b.kind !== 'gull') continue;
+      b.state = 'circle';
+      b.orbitR = 4 + Math.random() * 3;
+      b.orbitSpeed = (Math.random() < 0.5 ? -1 : 1) * (1.8 + Math.random());
+      b.swoopAt = S.t + 999;
+      b.civil = 20;
+      n++;
+    }
+    if (n >= 2) {
+      ev.civilwar = 14;
+      bus.banner('SEAGULL CIVIL WAR', 'walk through the middle of it');
+      toast('\u{1F426} they have turned on each other');
+      AU.gullCall(); AU.screech();
+      say('this is not about me. excellent.', true);
+    }
+
+  } else if (kind === 'fisherman') {
+    const g = new THREE.Group();
+    const body = meshOf(new THREE.CapsuleGeometry(0.3, 0.7, 4, 8), 0x6d8f5e); body.position.y = 1.0; g.add(body);
+    const head = meshOf(new THREE.SphereGeometry(0.27, 10, 8), 0xe8c9a4); head.position.y = 1.65; g.add(head);
+    const hat = meshOf(new THREE.CylinderGeometry(0.42, 0.42, 0.1, 10), 0xcbb582); hat.position.y = 1.86; g.add(hat);
+    const rod = meshOf(new THREE.CylinderGeometry(0.035, 0.02, 3.4, 5), 0x5a4632);
+    rod.rotation.z = -0.9; rod.position.set(-1.0, 2.0, 0); g.add(rod);
+    const bucket = meshOf(new THREE.CylinderGeometry(0.3, 0.26, 0.44, 8), 0x3a86c4);
+    bucket.position.set(0.9, 0.22, 0.4); g.add(bucket);
+    const px = clamp(runner.x + 24 + Math.random() * 24, W.xMin, W.goalX - 14);
+    addProp('fisherman', g, px, clamp(-8 + Math.random() * 4, W.zMin + 1, -3),
+      { r: 7, castAt: S.t + 2 + Math.random() * 3, hooked: false });
+    toast('\u{1F3A3} surf fisherman. mind his backcast.');
   }
   ev.nextAt = S.t + 12 + Math.random() * 10;
   S.stats.events++;
@@ -921,9 +999,10 @@ export function updateEvents(dt, runner) {
   updateProps(dt, runner);
 
   if (S.t >= ev.nextAt) {
-    const pool = [['cloud', 26], ['whale', 18], ['dolphins', 20], ['sealions', 18], ['sandcastle', 18], ['kite', 14]];
-    if (S.level >= 2) pool.push(['focus', 22], ['sneaker', 16], ['wedding', 12]);
-    if (S.level >= 3) pool.push(['grunion', 9]);
+    const pool = [['cloud', 22], ['whale', 15], ['dolphins', 17], ['sealions', 15],
+                  ['sandcastle', 15], ['kite', 12], ['detector', 14], ['volleyball', 14]];
+    if (S.level >= 2) pool.push(['focus', 18], ['sneaker', 14], ['wedding', 11], ['fisherman', 12]);
+    if (S.level >= 3) pool.push(['grunion', 8], ['lowtide', 12], ['civilwar', 10]);
     let tot = 0; for (const [, w] of pool) tot += w;
     let r = Math.random() * tot; let pick = 'cloud';
     for (const [k, w] of pool) { r -= w; if (r <= 0) { pick = k; break; } }
@@ -1004,7 +1083,79 @@ function updateProps(dt, runner) {
         bus.flash(0.7);
         AU.tone(2000, 0.04, 'sine', 0.05);
       }
+
+    } else if (p.kind === 'detector') {
+      // paces the beach and periodically digs; loot appears where he stops
+      p.x += p.dir * 1.5 * dt;
+      if (p.x < W.xMin + 6 || p.x > W.goalX - 6) p.dir *= -1;
+      p.mesh.position.set(p.x, groundY(p.x, p.z), p.z);
+      p.mesh.rotation.y = p.dir > 0 ? Math.PI / 2 : -Math.PI / 2;
+      p.mesh.children[4].rotation.y = Math.sin(S.t * 2.2) * 0.5;   // sweeping the coil
+      p.next -= dt;
+      if (p.next <= 0 && p.digs < 4) {
+        p.next = 5 + Math.random() * 4; p.digs++;
+        AU.tone(1500, 0.06, 'sine', 0.05); AU.tone(1800, 0.08, 'sine', 0.04, 0.07);
+        particles.burst(p.x + p.dir, groundY(p.x, p.z) + 0.2, p.z, 8,
+          { color: 0xe8cf9a, size: 0.28, ttl: 0.6, spread: 1.4 });
+        dropItem(rollItem(Math.random, Math.random() < 0.4), p.x + p.dir * 2, p.z);
+        toast('\u{1F575} he found something. it is yours now.');
+      }
+
+    } else if (p.kind === 'volleyball') {
+      p.life -= dt;
+      p.x += p.vx * dt; p.z += p.vz * dt;
+      p.vx *= Math.pow(0.55, dt); p.vz *= Math.pow(0.55, dt);
+      p.x = clamp(p.x, W.xMin, W.xMax); p.z = clamp(p.z, W.zMin, W.zMax);
+      const bounce = Math.abs(Math.sin(S.t * 5)) * Math.min(1, Math.hypot(p.vx, p.vz) / 6);
+      p.mesh.position.set(p.x, groundY(p.x, p.z) + 0.34 + bounce * 0.5, p.z);
+      p.mesh.rotation.x += dt * 4; p.mesh.rotation.z += dt * 3;
+      if (!p.kicked && d < 1.4) {
+        p.kicked = true;
+        if (runner.speed > 6) {
+          // full cartoon: feet up, sky, everything everywhere
+          runner.trip('faceplant', '\u{1F3D0} YOU STOOD ON THE BALL');
+          runner.vy = 5.5; runner.grounded = false;
+          p.vx = (Math.random() - 0.5) * 18; p.vz = (Math.random() - 0.5) * 18;
+          AU.thwack();
+        } else {
+          p.vx = Math.sin(runner.facing) * 22; p.vz = Math.cos(runner.facing) * 22;
+          toast('\u{1F3D0} nice touch! the players cheer  +300');
+          addScore(300); AU.coin();
+          S.aggro = Math.max(0, S.aggro - 12);       // even the gulls respect it
+          say('yeah! did you see that?', true);
+        }
+        setTimeout(() => { p.kicked = false; }, 900);
+      }
+      if (p.life <= 0) dropProp(p);
+
+    } else if (p.kind === 'fisherman') {
+      p.mesh.position.set(p.x, groundY(p.x, p.z), p.z);
+      p.mesh.rotation.y = -Math.PI / 2 + Math.sin(S.t * 0.4) * 0.3;
+      if (S.t > p.castAt) {
+        p.castAt = S.t + 6 + Math.random() * 5;
+        AU.sweep(900, 1600, 0.3, 'sine', 0.05);
+        if (d < p.r && !runner.stumbleT) {
+          // snagged on the backcast, dragged a few feet, profusely apologised to
+          const a = Math.atan2(p.x - runner.x, p.z - runner.z);
+          runner.kx += Math.sin(a) * 13; runner.kz += Math.cos(a) * 13;
+          runner.trip('stumble', '\u{1F3A3} HOOKED ON HIS BACKCAST');
+          say('sorry! sorry! he says sorry!', true);
+        }
+      }
     }
+  }
+
+  // ---- low tide: the sea walks out and leaves a cool flat behind
+  if (ev.lowTide > 0) {
+    ev.lowTide -= dt;
+    ev.surge = Math.min(ev.surge, -9);
+    if (ev.lowTide <= 0) { toast('the tide is coming back in!', 'warn'); ev.surge = 4; }
+  }
+  // ---- civil war: they are far too busy with each other
+  if (ev.civilwar > 0) {
+    ev.civilwar -= dt;
+    S.aggro = Math.max(0, S.aggro - 30 * dt);
+    if (ev.civilwar <= 0) toast('...they have remembered you.', 'warn');
   }
   // guilt: you move slower when you feel bad about yourself
   if (S.guilt > 0) S.guilt -= dt;
@@ -1078,6 +1229,7 @@ export function generateLevel(runner) {
   const rng = mulberry32(S.seed ^ 0x5EED);
 
   applyWeather(pickWeather(rng));
+  S.windDir = rng() * Math.PI * 2;
   rebuildTerrain();
   resetTide();
   buildScenery(rng);

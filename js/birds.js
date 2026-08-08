@@ -13,7 +13,9 @@ import { bus } from './bus.js';
 import { ITEMS, buildStats, removeItem, grant, hasItem } from './items.js';
 
 export const flock = [];
-const MAX_BIRDS = 14;
+const MAX_BIRDS = 20;
+// birds.js can't import actors.js (cycle), so cool pads are reached indirectly
+S.coolPadsRef = () => S.coolPads;
 
 // ---------------- meshes ----------------
 /** a tapered wing outline, not a plank */
@@ -175,6 +177,7 @@ const PRESET = {
   vulture: { body: 0x3d3138, wing: 0x241e24, tip: 0x141014, head: 0xb05a4a, beak: 0xe0d0b0, scale: 1.6 },
   falcon:  { body: 0x6a6472, wing: 0x3a3644, tip: 0x16141c, head: 0xd8cfc0, beak: 0x2e2a30, scale: 1.25 },
   pelican: { body: 0xe8e2d6, wing: 0x9a9488, tip: 0x3a3630, head: 0xf6f1e6, beak: 0xf0b64a, scale: 1.55 },
+  tern:    { body: 0xfdfdfa, wing: 0xc6cfd8, tip: 0x1e1e26, head: 0x2a2a32, beak: 0xf5c542, scale: 0.72 },
   eagle:   { body: 0x5a4230, wing: 0x3a2a18, tip: 0x1e1610, head: 0xfaf7f2, beak: 0xf5c542, scale: 2.3 },
 };
 
@@ -344,6 +347,81 @@ export function spawnFalcon(runner) {
   bus.toast('\u{1F985} PEREGRINE FALCON — GET BEHIND A ROCK', 'bad');
   say('oh no. oh no no no.', true);
 }
+/** Least terns: small, fast, relentless. They don't hurt — they just make
+ *  holding a straight line impossible. */
+export function spawnTerns(runner, n) {
+  for (let i = 0; i < n; i++) {
+    const b = addBird('tern', runner.x + (Math.random() - 0.5) * 24, runner.z - 20, 10 + Math.random() * 5, 'harass');
+    if (!b) return;
+    b.phase = Math.random() * 6.3;
+    b.orbitR = 3 + Math.random() * 3;
+    b.orbitSpeed = (1.6 + Math.random()) * (Math.random() < 0.5 ? 1 : -1);
+    b.alt = 1.6 + Math.random() * 1.4;
+    b.life = 14 + Math.random() * 8;
+  }
+  AU.gullCall();
+  bus.toast('\u{1F426} LEAST TERNS — they will not leave you alone', 'bad');
+}
+function updateTern(b, dt, runner) {
+  b.life -= dt;
+  b.angle = (b.angle || 0) + b.orbitSpeed * dt;
+  // tight, darting circles right around your head
+  const jx = Math.sin(S.t * 5 + b.phase) * 1.2;
+  const tx = runner.x + Math.cos(b.angle) * b.orbitR + jx;
+  const tz = runner.z + Math.sin(b.angle) * b.orbitR;
+  const ty = runner.y + b.alt + Math.sin(S.t * 4 + b.phase) * 0.4;
+  const px = b.x, pz = b.z;
+  b.x = damp(b.x, tx, 7, dt);
+  b.z = damp(b.z, tz, 7, dt);
+  b.y = damp(b.y, ty, 7, dt);
+  bank(b, Math.atan2(b.x - px, b.z - pz), dt);
+  flap(b, 1);
+  // they crowd whichever way you're heading, so you're forced to zigzag
+  const d = Math.hypot(runner.x - b.x, runner.z - b.z);
+  if (d < 2.2) {
+    runner.kx += (runner.x - b.x) * 1.4 * dt;
+    runner.kz += (runner.z - b.z) * 1.4 * dt;
+  }
+  if (b.life <= 0) { b.state = 'flee'; b.t = 0; b.angle = Math.random() * 6.3; }
+  if (b.state === 'flee') {
+    b.y += 6 * dt; b.x += Math.sin(b.angle) * 14 * dt; b.z += Math.cos(b.angle) * 14 * dt;
+    if (b.t > 2) killBird(b);
+  }
+}
+
+/** A pelican line in formation. Their shadow is cool ground — chase it if you
+ *  dare, but they fly where they like and they do not swerve. */
+export function spawnPelicanLine(runner) {
+  const z = clamp(runner.z + (Math.random() - 0.5) * 8, -6, 16);
+  const dir = Math.random() < 0.5 ? 1 : -1;
+  for (let i = 0; i < 5; i++) {
+    const b = addBird('pelican', runner.x - dir * (40 + i * 5.5), z + i * 0.8, 7 + i * 0.4, 'formation');
+    if (!b) return;
+    b.dir = dir; b.idx = i;
+    b.mesh.scale.setScalar(1.55 * 0.62);
+    if (i === 0) { b.pad = { x: b.x, z: b.z, r: 5.5 }; S.coolPadsRef().push(b.pad); }
+  }
+  bus.toast('\u{1F9A2} pelicans inbound — ride their shadow');
+}
+function updatePelicanLine(b, dt, runner) {
+  b.x += b.dir * 13 * dt;
+  b.z += Math.sin(S.t * 0.4 + b.idx) * 0.35 * dt;
+  b.y = damp(b.y, groundY(b.x, b.z) + 7 + b.idx * 0.35, 2, dt);
+  b.mesh.rotation.y = b.dir > 0 ? Math.PI / 2 : -Math.PI / 2;
+  // pelicans glide for ages then give one lazy beat
+  flap(b, Math.max(0, Math.sin(S.t * 0.9 + b.idx * 0.6)) * 0.9 + 0.08);
+  if (b.pad) { b.pad.x = b.x; b.pad.z = b.z; }
+  // fly into one and it simply knocks you down; they are enormous
+  if (Math.hypot(runner.x - b.x, runner.z - b.z) < 2 && Math.abs(runner.y + 1.4 - b.y) < 2) {
+    runner.kx += b.dir * 14;
+    runner.trip('stumble', '\u{1F9A2} you ran into a pelican');
+  }
+  if (Math.abs(b.x - runner.x) > 90) {
+    if (b.pad) { const arr = S.coolPadsRef(); const i = arr.indexOf(b.pad); if (i >= 0) arr.splice(i, 1); }
+    killBird(b);
+  }
+}
+
 export function spawnEagle(runner, summoned) {
   if (flock.some(b => b.kind === 'eagle')) return;
   const b = addBird('eagle', runner.x - 26, runner.z - 20, 20, 'arrive');
@@ -386,7 +464,9 @@ export function updateBirds(dt, runner, frozen) {
       case 'vulture': updateVulture(b, dt, runner); break;
       case 'falcon': updateFalcon(b, dt, runner, stats); break;
       case 'eagle': updateEagle(b, dt, runner); break;
-      case 'pelican': updateProphet(b, dt, runner); break;
+      case 'pelican': b.state === 'formation'
+        ? updatePelicanLine(b, dt, runner) : updateProphet(b, dt, runner); break;
+      case 'tern': updateTern(b, dt, runner); break;
     }
     b.mesh.position.set(b.x, b.y, b.z);
     if (b.carrySprite) b.carrySprite.position.set(b.x, b.y - 0.55, b.z);

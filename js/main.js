@@ -12,7 +12,7 @@ import {
   paintSand, updateHaze, faceHaze, sunSprite, WEATHER,
 } from './world.js';
 import {
-  Runner, GOALS, generateLevel, updateEvents, checkCheckpoints, dropItem,
+  Runner, GOALS, generateLevel, updateEvents, checkCheckpoints, dropItem, fireEvent,
   particles, prints, wire, levelGroup,
 } from './actors.js';
 import {
@@ -22,7 +22,7 @@ import {
 } from './items.js';
 import {
   flock, updateBirds, updateSanderlings, scatterAt, clearFlock,
-  spawnThief, spawnVulture, spawnFalcon, spawnEagle,
+  spawnThief, spawnVulture, spawnFalcon, spawnEagle, spawnTerns, spawnPelicanLine,
 } from './birds.js';
 import { wireBus } from './bus.js';
 import { AU, say, OW } from './audio.js';
@@ -558,12 +558,15 @@ function mergeScores(a, b) {
   return out.slice(0, MAX_SCORES);
 }
 async function fetchScores() {
-  let server = [];
+  // scores.json is read as a PLAIN STATIC FILE, which works identically on the
+  // local Python server and on static hosting like Vercel. The committed file
+  // is therefore the canonical hall, shared by everyone playing the deploy.
+  let published = [];
   try {
-    const r = await fetch('_scores', { cache: 'no-store' });
-    if (r.ok) server = await r.json();
-  } catch { /* static hosting: localStorage only */ }
-  scoreCache = mergeScores(server, localScores());
+    const r = await fetch('scores.json?t=' + Date.now(), { cache: 'no-store' });
+    if (r.ok) published = await r.json();
+  } catch { /* no file yet */ }
+  scoreCache = mergeScores(published, localScores());
   mirrorLocal(scoreCache);
   renderScores();
 }
@@ -571,6 +574,9 @@ async function pushScore(entry) {
   scoreCache = mergeScores([entry], scoreCache);
   mirrorLocal(scoreCache);
   renderScores();
+  // Writing back only works where a real server is listening (local play).
+  // On static hosting this 404s harmlessly and the localStorage mirror keeps
+  // the score; to publish it to everyone, commit scores.json.
   try {
     const r = await fetch('_scores', {
       method: 'POST',
@@ -582,7 +588,7 @@ async function pushScore(entry) {
       mirrorLocal(scoreCache);
       renderScores();
     }
-  } catch { /* offline — the mirror already has it */ }
+  } catch { /* static host — the mirror already has it */ }
 }
 const loadScores = () => scoreCache;
 function qualifies(sc) {
@@ -735,6 +741,8 @@ function simulate(dt) {
       if (kelp.shield <= 0) toast('the kelp is spent — soak it in the sea', 'warn');
     }
   }
+  // humidity: nothing cools as well as it should, and you know it
+  if (rate < 0 && S.weather.coolMul) rate *= S.weather.coolMul;
   if (S.invuln > 0) rate = Math.min(rate, HEAT.coolRefuge);   // the sand simply gives up
   // the planted foot takes the brunt — alternating is how you survive.
   // single shoes protect one foot only, which is very funny and quite useful.
@@ -805,6 +813,12 @@ function simulate(dt) {
     }
     if (S.heatState >= 4 && Math.random() < 0.5 * dt) spawnVulture(runner);
     if (S.level >= 6 && S.aggro > 80 && Math.random() < 0.12 * dt) spawnFalcon(runner);
+    if (S.level >= 5 && S.aggro > 60 && !flock.some(b => b.kind === 'tern') && Math.random() < 0.10 * dt) {
+      spawnTerns(runner, 3);
+    }
+    if (S.level >= 4 && !flock.some(b => b.state === 'formation') && Math.random() < 0.055 * dt) {
+      spawnPelicanLine(runner);
+    }
     const wantEagle = build.eagle ? 0.05 : 0.008;
     if (S.level >= 3 && S.eagleTimer <= 0 && Math.random() < wantEagle * dt) spawnEagle(runner, build.eagle);
   }
@@ -1044,6 +1058,7 @@ window.DBYF = {
   S, runner, camera, cam, keys, input, renderer, scene, AU,
   ITEMS, SYNERGIES, buildStats, activeSynergies, grant, readyActive, flock,
   spawnThief, spawnVulture, spawnFalcon, spawnEagle, scatterAt, useItem, dropItem,
+  spawnTerns, spawnPelicanLine, fireEvent,
   levelComplete, die, nextLevel, generateLevel: () => generateLevel(runner),
   /** headless tick. `visual` does the expensive repaint; skip it for balance sims. */
   step(dt = 0.016, visual = true) {

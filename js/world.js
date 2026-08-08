@@ -19,9 +19,16 @@ export const WEATHER = {
              sky: [0x8fd0ff, 0xdff2ff], fog: [90, 340], fogC: 0xd8eeff, light: 0xfff4dc, amb: 1.05, sun: 'smug' },
   drizzle: { key: 'drizzle', name: 'DRIZZLE',      heat: 0.66, aggro: 0.80, wash: 1,
              sky: [0x8f9fb0, 0xb8c6d2], fog: [30, 130], fogC: 0xaebcca, light: 0xcfd8e2, amb: 0.9, sun: 'hidden' },
+  // a prankster: shoves you sideways in gusts and scatters loose gear
+  wind:    { key: 'wind',    name: 'THE WIND',     heat: 0.88, aggro: 0.9,  wash: 1,  gust: 1,
+             sky: [0x9cc4e4, 0xd6e6f2], fog: [60, 260], fogC: 0xd2e2ee, light: 0xf2f0e4, amb: 1.0, sun: 'smug' },
+  // no visible weather at all. everything just cools worse. it's not the heat.
+  humid:   { key: 'humid',   name: 'THE HUMIDITY', heat: 1.12, aggro: 1.15, wash: 0,  coolMul: 0.55,
+             sky: [0xb9c7c0, 0xe4e2cf], fog: [40, 190], fogC: 0xdcdcc8, light: 0xf0ecd8, amb: 1.1, sun: 'sleepy' },
 };
 const WEATHER_POOL = [
-  ['clear', 30], ['noon', 22], ['marine', 15], ['golden', 13], ['lowtide', 12], ['drizzle', 8],
+  ['clear', 26], ['noon', 19], ['marine', 13], ['golden', 12],
+  ['lowtide', 11], ['drizzle', 8], ['wind', 12], ['humid', 10],
 ];
 
 // ---------------- scene ----------------

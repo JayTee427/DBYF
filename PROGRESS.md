@@ -7,7 +7,7 @@ and what's left. Keep it current when things land.
 
 ## Where we are
 
-**v2.2** — playable end to end. Third-person runner, endless escalating beaches,
+**v2.8** — playable end to end. Third-person runner, endless escalating beaches,
 permanent roguelike builds, a living bird flock, arcade scoring.
 
 ### Built and working
@@ -19,10 +19,10 @@ permanent roguelike builds, a living bird flock, arcade scoring.
 | Beaches | 504m, ~2.5 min at a real pace, 3 checkpoint cabanas splitting it into 4 legs |
 | SOLE TRAIN | combo for chaining fresh refuges without cooking a foot |
 | Goals (6) | ice cream truck, flip-flops, beach shower, umbrella camp, tide pools, rare **seal nursery** — each with its own model and audio beacon |
-| Weather (6) | clear, high noon, marine layer, golden hour, low tide, drizzle |
-| Events (4) | cloud shade to chase, whale-breach wave surge, sun focus ring, sneaker wave |
-| Items (21) | permanent for the run, 3 FIFO slots, F to swap into a full build, 8 actives on [E], 8 synergies, 3 cursed, **6-7** instant invincibility |
-| Birds | gulls wheel overhead in a growing mob → peel off into telegraphed dives → **steal an item you can chase down**; Heermann's thief, plover broken-wing con, vulture, falcon lock-on, bald eagle |
+| Weather (8) | clear, high noon, marine layer, golden hour, low tide, drizzle, **the wind**, **the humidity** |
+| Events (15) | cloud shade, whale wave, sun focus, sneaker wave, dolphin escort, sea lion pile, Sandcastle Kingdom, Kite Guy, grunion run, beach wedding, Metal Detector Man, volleyball, low tide reveal, seagull civil war, fisherman's backcast |
+| Items (31) | permanent for the run, 3 slots (4 with shorts), auto-pickup with the ejected item dropping on the sand, 10 actives on [E], 8 synergies, cursed items, single-shoe items that protect one foot, **6-7** instant invincibility |
+| Birds (9) | gulls wheel overhead in a growing mob → peel off into telegraphed dives → **steal an item you can chase down**; Heermann's thief, plover broken-wing con, willet tripwires, least terns, pelican squadrons, vulture, falcon lock-on, bald eagle, and the Wash Prophet |
 | Arcade | Hall of Soles **persisted to `scores.json`**, 3-initial entry, podiatrist report card, 4 difficulties |
 | Audio | soft master bus, volume slider, M to mute, persisted |
 
@@ -30,10 +30,14 @@ permanent roguelike builds, a living bird flock, arcade scoring.
 - `serve.py` accepts **POST /_shot** — the page posts a canvas dataURL, it lands in
   `_shots/*.jpg`. The only way to actually *see* renders when the browser pane
   won't composite.
-- `serve.py` also serves **GET/POST `/_scores`** backed by **`scores.json`** (tracked in
-  git on purpose). The client merges server + localStorage on boot, so scores survive
-  browser wipes, new machines and game revisions; on static hosting with no server it
-  degrades to localStorage automatically.
+- **Scores**: the client READS `scores.json` as a plain static file, so it works
+  identically locally and on **Vercel**. It merges that with a localStorage mirror, so
+  nothing is lost either way. Writing back (POST `/_scores`) only works against the
+  local Python server — to publish scores to everyone on the deploy, commit
+  `scores.json`. Keeps the last 100; the attract board scrolls 12 at a time.
+- **Deployment is Vercel**, auto-tracking GitHub commits. `vercel.json` sets
+  no-cache headers on `index.html`, `js/*` and `scores.json` so a push is live
+  immediately rather than serving a stale bundle.
 - `DBYF.step(dt, visual=false)` runs headless sim ticks — used for bot balance runs.
 - `DBYF.heatProbe(x,z)` samples the effective heat field.
 - **Never tune difficulty against perfect-routing bots.** They made it far too hard
@@ -91,13 +95,17 @@ mediocre movement just produces more mediocre-feeling content.
 ### Birds still missing
 - [x] **Willets / Godwits** — *v2.6*: groups doze on the open sand probing for food; sprint
       within 6m and the whole group explodes upward screaming, +26 attention
-- [ ] **Least Terns** — precision aerial harassment forcing zigzags
-- [ ] **Brown Pelican squadrons** — formation flyby, moving wall, traveling shadow lure
-      *(the pelican model now exists — it's the Wash Prophet)*
+- [x] **Least Terns** *(v2.8)* — tight darting circles right around your head that shove
+      you off your line for ~18s. Level 5+ at high attention.
+- [x] **Brown Pelican squadrons** *(v2.8)* — a line of five in formation, gliding then
+      one lazy beat; the leader drags a cool shadow you can ride, and running into one
+      knocks you flat. Level 4+.
 
-### Weather still missing
-- [ ] **Wind** — prankster; blows refuges (and the umbrella goal) around
-- [ ] **The Humidity** — invisible oppression bar, "It's Not the Heat, It's..."
+### Weather
+- [x] **THE WIND** *(v2.8)* — gusts physically shove you sideways on a per-level wind
+      direction, with sand streaming past. Lean against it.
+- [x] **THE HUMIDITY** *(v2.8)* — no visible weather at all; everything just cools 45%
+      worse. Refuges, shade and the sea all underperform. It's not the heat.
 - [ ] **Dust Devil** — a five-year-old tornado carrying items around; chase it to shop
 
 ### Background events
@@ -113,9 +121,18 @@ Built: cloud shade, whale wave, sun focus, sneaker wave.
 - [x] **Grunion run** *(v2.6)* — every bird leaves for 22s, attention pinned at zero
 - [x] **Beach wedding** *(v2.6)* — cross the seating and you're Wedding Crasher: guilt,
       plus the photographer's flash whiting out your screen for 8s
-- [ ] Metal Detector Man (a walking loot forecast)
-- [ ] Surf school parade, volleyball cartoon physics
-- [ ] Low tide reveal (greed timer), seagull civil war, fisherman's backcast
+- [x] **Metal Detector Man** *(v2.8)* — paces the beach sweeping, headphones on,
+      oblivious; digs up to 4 times and each dig drops real loot where he stops
+- [x] **Volleyball** *(v2.8)* — a loose ball. Sprint into it and you go feet-up in a
+      full faceplant; touch it gently and you punt it back for +300 and the gulls
+      briefly respect you
+- [x] **Low tide reveal** *(v2.8)* — the sea walks way out for 15s exposing a cool flat,
+      then comes back
+- [x] **Seagull civil war** *(v2.8)* — they turn on each other for 14s and attention
+      drains hard; walk straight through the middle of it
+- [x] **Fisherman's backcast** *(v2.8)* — stand near him when he casts and you get
+      hooked, dragged and apologised to
+- [ ] Surf school parade
 
 ### Systems never started
 - [x] **The Wash Prophet** *(v2.6)* — one pelican per beach, standing apart, never
