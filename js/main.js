@@ -92,9 +92,19 @@ function instantPickup(key) {
   }
 }
 wire(toast, addScore);
+/** Hit-stop: freeze the world for a few frames so an impact reads as force. */
+function hitStop(seconds) { S.hitStop = Math.max(S.hitStop || 0, seconds); }
+function flashScreen(alpha, ms) {
+  D.flash.style.transition = 'none';
+  D.flash.style.opacity = String(alpha);
+  requestAnimationFrame(() => {
+    D.flash.style.transition = `opacity ${ms}ms ease-out`;
+    D.flash.style.opacity = '0';
+  });
+}
 wireBus({
   toast, score: addScore, banner,
-  shake: (v) => { cam.shake = Math.max(cam.shake, v); },
+  shake: (v) => { cam.shake = Math.max(cam.shake, v); hitStop(v * 0.05); },
   instant: instantPickup,
 });
 
@@ -107,12 +117,6 @@ addEventListener('keydown', (e) => {
   keys.add(e.code);
   if (e.code === 'Space') e.preventDefault();
   if (e.code === 'KeyE') useItem();
-  if (e.code === 'KeyF' && nearItem) {                 // swap into a full build
-    const out = S.slots[0];
-    toast('dropped ' + out.def.icon + ' ' + out.def.name + ' for it', 'warn');
-    takeItem(nearItem.it);
-    nearItem = null;
-  }
   if (e.code === 'KeyM') { const m = AU.toggleMute(); toast(m ? '🔇 MUTED' : '🔊 SOUND ON'); syncVolUI(); }
   if (e.code === 'BracketLeft') { AU.setVolume(AU.volume - 0.1); syncVolUI(); }
   if (e.code === 'BracketRight') { AU.setVolume(AU.volume + 0.1); syncVolUI(); }
@@ -256,10 +260,18 @@ function takeItem(it) {
     AU.coin();
     return;
   }
+  // whatever rotates out lands on the sand rather than vanishing, so a
+  // careless pickup is always recoverable
+  const ejected = S.slots.length >= S.maxSlots && !ITEMS[it.key].instant ? S.slots[0] : null;
   particles.burst(it.x, groundY(it.x, it.z) + 0.8, it.z, 8,
     { color: ITEMS[it.key].rarity >= 2 ? 0xffd94a : 0xbfe8ff, size: 0.32, ttl: 0.6, spread: 1.7 });
   grant(it.key);
   addScore(60);
+  if (ejected) {
+    const a = Math.random() * Math.PI * 2;
+    const dropped = dropItem(ejected.key, runner.x + Math.sin(a) * 3.2, runner.z + Math.cos(a) * 3.2);
+    dropped.cooldown = 2.0;                     // so you don't instantly re-grab it
+  }
   if (it.key === 'bottle') buildCoolRoute();
 }
 /** Bucket refills itself whenever you stand in the sea. */
@@ -303,6 +315,7 @@ function startRun(diffKey) {
   S.feet.L = 0; S.feet.R = 0; S.health = 100; S.stamina = STAM.max;
   S.aggro = 0; S.slots = []; S.stats = freshStats(); S.tutorial = 0;
   S.heatState = 0; S.prevHeatState = 0; S.combo = 0; S.invuln = 0;
+  S.hitStop = 0; S.deathT = 0;
   resetSynergies();
   clearRoute();
   generateLevel(runner);
@@ -400,8 +413,48 @@ function doneness(v) {
   if (v < 95) return 'CHARCOAL';
   return 'TECHNICALLY BRISKET';
 }
+/** The feet give out: collapse, smoke, a beat of silence, then the card. */
+function beginDeath() {
+  if (S.mode === 'dying') return;
+  S.mode = 'dying';
+  S.deathT = 0;
+  keys.clear();
+  runner.trip('faceplant', null);
+  runner.stumbleT = 99;                    // stay down
+  runner.stumbleMax = 99;
+  hitStop(0.35);
+  cam.shake = 1.4;
+  flashScreen(0.55, 500);
+  AU.sad();
+  say(['tell my shoes... I loved them.', 'I regret... the sandals...', 'so... close...'][Math.floor(Math.random() * 3)], true);
+  particles.burst(runner.x, runner.y + 0.5, runner.z, 24,
+    { color: 0x555555, size: 0.5, ttl: 1.6, vy: 1.8, spread: 2.4, grow: 3 });
+  document.exitPointerLock?.();
+}
+function updateDying(dt) {
+  S.deathT += dt;
+  // keep the body down and smoking while the camera pulls back
+  runner.root.rotation.x = damp(runner.root.rotation.x, 1.5, 8, dt);
+  runner.rig.position.y = damp(runner.rig.position.y, -0.55, 8, dt);
+  if (Math.random() < dt * 14) {
+    particles.spawn(runner.x + (Math.random() - 0.5) * 1.2, runner.y + 0.3,
+      runner.z + (Math.random() - 0.5) * 1.2,
+      { color: 0x777777, size: 0.42, ttl: 1.5, vy: 1.5, opacity: 0.55, grow: 2.6 });
+  }
+  cam._d = damp(cam._d ?? 9, 13, 1.6, dt);
+  cam._h = damp(cam._h ?? 3, 6.5, 1.6, dt);
+  const cp = Math.cos(cam._p ?? 0.3);
+  camera.position.set(
+    runner.x + Math.sin(cam.yaw) * cam._d * cp,
+    runner.y + cam._h,
+    runner.z + Math.cos(cam.yaw) * cam._d * cp,
+  );
+  camera.lookAt(runner.x, runner.y + 0.3, runner.z);
+  if (S.deathT > 2.2) die();
+}
 function die() {
   S.mode = 'dead';
+  S.hitStop = 0;
   document.exitPointerLock?.();
   const s = S.stats;
   const consolation = Math.round((runner.x - W.startX) * 3 * S.diff.mult);
@@ -659,11 +712,13 @@ function simulate(dt) {
       it.mesh.rotation.z = it.tumble * 4;
       if (it.tumble <= 0) it.mesh.rotation.z = 0;
     }
+    if (it.cooldown > 0) { it.cooldown -= dt; continue; }
     const d = Math.hypot(runner.x - it.x, runner.z - it.z);
-    if (d < 2.9) {
-      // instant pickups don't need a slot, so they never make you choose
-      if (ITEMS[it.key].instant || S.slots.length < S.maxSlots) takeItem(it);
-      else if (!nearItem || d < nearItem.d) nearItem = { it, d };
+    // Always auto-pickup. If your build is full the oldest rotates out and
+    // lands on the sand at your feet, so nothing is ever lost by accident.
+    if (d < 2.9) takeItem(it);
+    else if (d < 9 && S.slots.length >= S.maxSlots && !ITEMS[it.key].instant) {
+      if (!nearItem || d < nearItem.d) nearItem = { it, d };
     }
   }
 
@@ -690,7 +745,7 @@ function simulate(dt) {
   }
   D.goalLbl.textContent = S.goal.def.icon + ' ' + S.goal.def.name + '  ' + Math.max(0, Math.round(gd)) + 'm';
   if (gd < S.goal.def.r) { levelComplete(); return; }
-  if (S.health <= 0) { die(); return; }
+  if (S.health <= 0) { beginDeath(); return; }
 }
 
 // ---------------- camera ----------------
@@ -787,12 +842,12 @@ function updateHUD() {
       (ready ? '' : ` <i>${Math.ceil(act.cd)}s</i>`);
   } else D.ability.classList.add('hidden');
 
-  // swap prompt when your build is full and you're standing on loot
-  if (nearItem) {
+  // heads-up while you're still approaching, so a full build is a choice
+  if (nearItem && S.slots.length) {
     const d = ITEMS[nearItem.it.key];
     D.swapHint.classList.remove('hidden');
     D.swapHint.innerHTML = `${d.icon} <b>${d.name}</b> — ${d.desc}<br>` +
-      `<b>F</b> to take (drops ${S.slots[0].def.icon} ${S.slots[0].def.name})`;
+      `<i>taking it drops ${S.slots[0].def.icon} ${S.slots[0].def.name} on the sand</i>`;
   } else D.swapHint.classList.add('hidden');
 
   // live synergy list
@@ -822,7 +877,9 @@ const clock = new THREE.Clock();
 let paintAcc = 0;
 function loop() {
   requestAnimationFrame(loop);
-  const dt = Math.min(clock.getDelta(), 0.05);
+  let dt = Math.min(clock.getDelta(), 0.05);
+  // hit-stop — the world hesitates for a few frames on a real impact
+  if (S.hitStop > 0) { S.hitStop -= dt; dt *= 0.12; }
   S.t += dt;
 
   readInput();
@@ -839,6 +896,9 @@ function loop() {
     updateCamera(dt);
     updateHUD();
     updateHaze(S.t, runner.x, runner.z);
+  } else if (S.mode === 'dying') {
+    runner.root.position.set(runner.x, runner.y, runner.z);
+    updateDying(dt);
   } else if (S.mode === 'title') {
     attract(S.t);
   } else {
@@ -867,8 +927,10 @@ window.DBYF = {
   levelComplete, die, nextLevel, generateLevel: () => generateLevel(runner),
   /** headless tick. `visual` does the expensive repaint; skip it for balance sims. */
   step(dt = 0.016, visual = true) {
+    if (S.hitStop > 0) { S.hitStop -= dt; dt *= 0.12; }
     S.t += dt; readInput(); updateTide(S.t);
     if (S.mode === 'play' || S.mode === 'scout') { simulate(dt); if (visual) updateHUD(); }
+    else if (S.mode === 'dying') { runner.root.position.set(runner.x, runner.y, runner.z); updateDying(dt); }
     if (!visual) return;
     updateOcean(S.t); paintSand(S.t); updateSanderlings(S.t, waveZ);
     updateCamera(dt); faceHaze(camera);

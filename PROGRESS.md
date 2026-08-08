@@ -68,7 +68,19 @@ mediocre movement just produces more mediocre-feeling content.
   - [x] **the sandal that sails away** — ~15% chance on a leap, lands 11m off, retrievable
   - [x] report card tracks Undignified stumbles / Full faceplants
   - [ ] wedding-photo cringe — blocked on the beach wedding event (see B)
-- [ ] **A3. Juice** — hit-stop on impacts, richer particles, a real death animation
+- [x] **A3. Juice** — *done in v2.5*
+  - [x] **hit-stop** — the world drops to 12% speed briefly on real impacts, scaled by
+        force, so a falcon hit reads as force instead of a number changing
+  - [x] **real death sequence** — you collapse face-first, the world hitches, the screen
+        flashes, smoke pours off you and the camera pulls back for ~2.2s before the
+        report card. `S.mode` gains a `dying` state.
+  - [x] screen flash helper, heavier death particles
+- [x] **Pickup bug (reported)** — with a full 3-item build, items silently refused to be
+      collected because they required a hidden **F** press. Now matches the original
+      design: **always auto-pickup, FIFO rotates**, and the ejected item *drops on the
+      sand* (2s cooldown) instead of vanishing, so nothing is ever lost by accident.
+      An approach warning shows what a pickup will displace. Item flow went from
+      8 → 31 collected across two beaches.
 
 ## B. Content gaps from the design bible
 

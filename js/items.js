@@ -252,7 +252,7 @@ export function grant(key, silent) {
     AU.pickup();
     bus.toast('+ ' + inst.def.icon + ' ' + inst.def.name + ' — ' + inst.def.desc,
       inst.def.cursed ? 'warn' : '');
-    if (dropped) bus.toast('↻ dropped ' + dropped.def.icon + ' ' + dropped.def.name, 'warn');
+    if (dropped) bus.toast('↻ ' + dropped.def.icon + ' ' + dropped.def.name + ' drops on the sand', 'warn');
     if (inst.def.cursed) say('this feels like a mistake.', false);
     if (key === 'duck') say('quack.', false);
   }
