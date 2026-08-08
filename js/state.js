@@ -55,7 +55,7 @@ export const S = {
   refuges: [], items: [], birds: [], props: [], fx: [], checkpoints: [],
   coolPads: [], hotPads: [], guilt: 0, prophet: null, readT: 0, windDir: 0,
   chests: [], crabs: [], mapFrags: 0, islandPending: false, keysUsed: false,
-  rescue: null, shoes: 0, setPieces: [],
+  rescue: null, shoes: 0, setPieces: [], goalHold: 0,
   ev: null,
   tutorial: 0,
   lastVoice: 0, lastNag: 0, lastSqueak: 0,
@@ -77,7 +77,18 @@ export function freshStats() {
 export const HEAT_NAMES = ['COMFY', 'TOASTY', 'OW OW OW', 'BURNING', 'ON FIRE'];
 export function footState(v) { return v < 25 ? 0 : v < 48 ? 1 : v < 70 ? 2 : v < 90 ? 3 : 4; }
 
+/**
+ * The sun climbs while you're out there. A gentle squeeze — +20% by ~2.5
+ * minutes — so dawdling always costs you something, without turning the
+ * back half of a long beach into a different game.
+ */
+export function sunPressure() {
+  return 1 + Math.min(0.20, (S.levelTime / 150) * 0.20);
+}
 // escalation comes mostly from more lava patches, so the per-level heat ramp is gentle
-export function effHeat() { return S.diff.heat * (S.weather ? S.weather.heat : 1) * (1 + 0.045 * (S.level - 1)); }
+export function effHeat() {
+  return S.diff.heat * (S.weather ? S.weather.heat : 1)
+       * (1 + 0.045 * (S.level - 1)) * sunPressure();
+}
 export function effAggro() { return S.diff.aggro * (S.weather ? S.weather.aggro : 1) * (1 + 0.08 * (S.level - 1)); }
 export function hasItem(k) { return S.slots.some(s => s.key === k); }

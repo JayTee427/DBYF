@@ -313,11 +313,14 @@ function drawSun(g, px, mood) {
 }
 export let sunSprite = faceSprite((g, px) => drawSun(g, px, 'smug'), 30);
 sunSprite.position.set(60, 62, -120);
+sunSprite.userData.baseScale = 30;
 scene.add(sunSprite);
 function setSunMood(mood) {
   scene.remove(sunSprite);
-  sunSprite = faceSprite((g, px) => drawSun(g, px, mood), mood === 'rage' ? 40 : 30);
+  const base = mood === 'rage' ? 40 : 30;
+  sunSprite = faceSprite((g, px) => drawSun(g, px, mood), base);
   sunSprite.position.set(60, 62, -120);
+  sunSprite.userData.baseScale = base;
   sunSprite.visible = mood !== 'hidden';
   scene.add(sunSprite);
 }

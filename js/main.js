@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { clamp, lerp, damp, angleLerp, mulberry32, meshOf } from './engine.js';
 import {
   S, W, HEAT, STAM, DIFFS, freshStats, HEAT_NAMES, footState,
-  effHeat, effAggro, hasItem,
+  effHeat, effAggro, hasItem, sunPressure,
 } from './state.js';
 import {
   scene, groundY, heatAt, wetness, waveZ, shadeAt, updateTide, updateOcean,
@@ -459,7 +459,7 @@ function levelComplete() {
 }
 function nextLevel() {
   if (S.mode !== 'interlevel') return;
-  S.level++;
+  S.level++; S.goalHold = 0;
   S.feet.L = 0; S.feet.R = 0;
   S.health = Math.min(100, S.health + 22);
   S.stamina = STAM.max;
@@ -997,8 +997,31 @@ function simulate(dt) {
     + (S.shoes > 0 ? 0.25 : 0)
     + (gd < 45 ? 0.2 : 0), 0, 1));
 
-  D.goalLbl.textContent = S.goal.def.icon + ' ' + S.goal.def.name + '  ' + Math.max(0, Math.round(gd)) + 'm';
-  if (gd < S.goal.def.r) { levelComplete(); return; }
+  // Some goals want more than a touch. Kept deliberately light — a beat of
+  // character at the finish, never something that withholds the win.
+  const gdef = S.goal.def;
+  D.goalLbl.textContent = (S.goalHold > 0 && gdef.hold)
+    ? `${gdef.icon} ${gdef.verb}… ${(gdef.hold - S.goalHold).toFixed(1)}s`
+    : `${gdef.icon} ${gdef.name}  ${Math.max(0, Math.round(gd))}m`;
+  if (gd < gdef.r) {
+    if (!gdef.hold) { levelComplete(); return; }
+    if (gdef.quiet && runner.speed > gdef.quiet) {
+      // you came barrelling in and the pups scattered
+      if (S.goalHold > 0.25) {
+        toast('\u{1F9AD} you spooked them! slow down.', 'bad');
+        AU.bark(0.09); say('sorry! sorry — walking! walking!', false);
+      }
+      S.goalHold = 0;
+    } else {
+      if (S.goalHold === 0) {
+        const openers = { truck: 'one please. a big one.', shower: 'oh that is COLD',
+                          nursery: 'hello. hello. I come in peace.' };
+        say(openers[S.goal.key] || '', false);
+      }
+      S.goalHold += dt;
+      if (S.goalHold >= gdef.hold) { levelComplete(); return; }
+    }
+  } else S.goalHold = 0;
   if (S.health <= 0) { beginDeath(); return; }
 }
 
@@ -1207,7 +1230,11 @@ function loop() {
     }
   }
   if (S.goal) S.goal.marker.position.y = groundY(S.goal.x, S.goal.z) + 9.5 + Math.sin(S.t * 2) * 0.5;
-  sunSprite.position.set(camera.position.x + 70, 62, camera.position.z - 130);
+  // the sun visibly bears down as the level wears on, so the mounting heat
+  // has a cause you can see rather than just being a number getting worse
+  const press = (sunPressure() - 1) / 0.20;
+  sunSprite.position.set(camera.position.x + 70, 62 - press * 9, camera.position.z - 130);
+  sunSprite.scale.setScalar(sunSprite.userData.baseScale * (1 + press * 0.22));
 
   renderer.render(scene, camera);
 }

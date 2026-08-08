@@ -23,17 +23,17 @@ scene.add(levelGroup);
 // GOALS
 // ============================================================
 export const GOALS = {
-  truck:     { icon: '\u{1F366}', name: 'ICE CREAM TRUCK', r: 5.5, beacon: 'jingle', z: [10, 20], gauntlet: true,
+  truck:     { icon: '\u{1F366}', name: 'ICE CREAM TRUCK', r: 5.5, beacon: 'jingle', z: [10, 20], gauntlet: true, hold: 1.6, verb: 'ORDERING',
                line: 'one ice cream. please. hurry.' },
   flipflops: { icon: '\u{1FA74}', name: 'YOUR FLIP-FLOPS',  r: 4.0, beacon: 'ping',   z: [20, 27], gauntlet: true,
                line: 'we are reunited! never again!' },
-  shower:    { icon: '\u{1F6BF}', name: 'THE BEACH SHOWER', r: 4.5, beacon: 'drip',   z: [14, 22], gauntlet: true,
+  shower:    { icon: '\u{1F6BF}', name: 'THE BEACH SHOWER', r: 4.5, beacon: 'drip',   z: [14, 22], gauntlet: true, hold: 2.2, verb: 'RINSING',
                line: 'cold water. I am reborn.' },
   umbrella:  { icon: '\u{26F1}',  name: 'UMBRELLA CAMP',    r: 5.0, beacon: 'ping',   z: [6, 16],  gauntlet: false,
                line: 'shade! sweet shade!' },
   tidepools: { icon: '\u{1FAA8}', name: 'THE TIDE POOLS',   r: 5.5, beacon: 'chime',  z: [-6, 0],  gauntlet: false,
                line: 'hello little crabs. I live here now.' },
-  nursery:   { icon: '\u{1F9AD}', name: 'THE SEAL NURSERY', r: 6.5, beacon: 'bark',   z: [-5, 1],  gauntlet: false,
+  nursery:   { icon: '\u{1F9AD}', name: 'THE SEAL NURSERY', r: 6.5, beacon: 'bark',   z: [-5, 1],  gauntlet: false, hold: 1.8, quiet: 7.2, verb: 'APPROACHING',
                line: 'the seals... the seals approve of me.' },
   parking:   { icon: '\u{1F697}', name: 'THE PARKING LOT',  r: 5.5, beacon: 'alarm',  z: [22, 28], gauntlet: true,
                line: 'whoever you are, here are your keys.' },

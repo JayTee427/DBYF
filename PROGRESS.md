@@ -7,7 +7,7 @@ and what's left. Keep it current when things land.
 
 ## Where we are
 
-**v3.5** — sections A and B complete; C1 (set pieces) and meta-progression done. Playable end to end. Third-person runner, endless escalating beaches,
+**v3.6** — sections A and B complete; C1, meta-progression, sun pressure and goal verbs done. Playable end to end. Third-person runner, endless escalating beaches,
 permanent roguelike builds, a living bird flock, arcade scoring.
 
 ### Built and working
@@ -225,18 +225,25 @@ and there's no way to check what anything does mid-run.
 - A "what is all this" page off the title screen.
 - First-time-only toasts: the first gull raid, first chest, first synergy.
 
-## 3. Goals need different verbs
-All nine are "touch this spot," which makes them reskins.
-- **Shower**: stand under it 3 seconds — the birds get a free run at you.
-- **Seal nursery**: approach *slowly* or the pups scatter and you have to wait.
-- **Tide pools**: arrive while the tide is OUT, so it's timing, not distance.
-- **Boardwalk stairs** (designed, never built): the asphalt gauntlet.
+## 3. ~~Goals need different verbs~~ — DONE in v3.6 (light touch, Jeff's call)
+Three goals now have a beat of character; the rest stay instant so the win is
+never withheld.
+- **Ice cream truck** — 1.6s ORDERING. "one please. a big one."
+- **Beach shower** — 2.2s RINSING. "oh that is COLD."
+- **Seal nursery** — 1.8s APPROACHING, and you must be **walking, not sprinting**
+  (threshold 7.2, between walk 6.0 and sprint 10.4) or the pups scatter and the
+  timer resets.
+*Note:* the first cut set that threshold at 4.5, below walking speed, which made
+the nursery literally unreachable. Caught by a bot run stalling. Any speed gate
+has to sit between 6.0 and 10.4.
+- [ ] still to do: **Boardwalk stairs** goal (the asphalt gauntlet), and tide
+      pools timed to low tide.
 
-## 4. Sun pressure (design bible, section C)
-The whole beach heats as the level runs, so dawdling always loses and cutting a
-corner through lava becomes a live decision rather than never worth it. Probably
-a global multiplier on `effHeat()` ramping with `S.levelTime`, plus the sky
-shifting toward white.
+## 4. ~~Sun pressure~~ — DONE in v3.6 (mild, Jeff's call)
+`sunPressure()` ramps heat **+20% over 150s then caps**, so dawdling always costs
+something without turning the back half of a long beach into a different game.
+The sun sprite visibly drops and swells as it climbs, so the mounting heat has a
+cause you can see. Measured 1.258 → 1.510 at the same spot.
 
 ## 5. Daily seed + shareable beach codes
 "BEACH #48213 nearly killed me." Seed the whole run from a date string, put the
