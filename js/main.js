@@ -688,15 +688,26 @@ function simulate(dt) {
 // ---------------- camera ----------------
 function updateCamera(dt) {
   const scouting = S.mode === 'scout';
-  const wantDist = scouting ? 19 : cam.dist;
+  // speed pushes the camera back and widens the lens — cheap, and it makes
+  // sprinting feel fast without changing a single movement number
+  const rush = clamp(runner.speed / 10.4, 0, 1);
+  const wantDist = scouting ? 19 : cam.dist + rush * 1.1;
   const wantHeight = scouting ? 17 : cam.height;
   const wantPitch = scouting ? 0.85 : cam.pitch;
-  const wantFov = scouting ? 78 : 62;
+  const wantFov = scouting ? 78 : 61 + rush * 8;
 
-  cam._d = damp(cam._d ?? wantDist, wantDist, 7, dt);
-  cam._h = damp(cam._h ?? wantHeight, wantHeight, 7, dt);
+  // landing punches the camera down, then it springs back
+  if (runner.landImpact > 0) {
+    cam.kick = Math.max(cam.kick || 0, runner.landImpact);
+    cam.shake = Math.max(cam.shake, runner.landImpact * 0.5);
+    runner.landImpact = 0;
+  }
+  cam.kick = Math.max(0, (cam.kick || 0) - dt * 4.5);
+
+  cam._d = damp(cam._d ?? wantDist, wantDist, 5, dt);
+  cam._h = damp(cam._h ?? wantHeight, wantHeight, 5, dt);
   cam._p = damp(cam._p ?? wantPitch, wantPitch, 7, dt);
-  camera.fov = damp(camera.fov, wantFov, 7, dt);
+  camera.fov = damp(camera.fov, wantFov, 6, dt);
   camera.updateProjectionMatrix();
 
   const cp = Math.cos(cam._p);
@@ -711,7 +722,7 @@ function updateCamera(dt) {
     Math.max(ty, groundY(tx, tz) + 1.2) + (Math.random() - 0.5) * sh,
     tz + (Math.random() - 0.5) * sh,
   );
-  camera.lookAt(runner.x, runner.y + (scouting ? 0.4 : 1.25), runner.z);
+  camera.lookAt(runner.x, runner.y + (scouting ? 0.4 : 1.25) - cam.kick * 0.55, runner.z);
 }
 
 // ---------------- HUD ----------------

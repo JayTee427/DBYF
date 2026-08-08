@@ -42,15 +42,19 @@ permanent roguelike builds, a living bird flock, arcade scoring.
 The foundation everything else is experienced through. Adding content on top of
 mediocre movement just produces more mediocre-feeling content.
 
-- [ ] **A1. Movement feel pass**
-  - acceleration / deceleration curves (movement is currently instant velocity)
-  - momentum preservation and a skid when you hard-turn at speed
-  - coyote time on refuge edges
-  - jump buffering (press just before landing → it still fires)
-  - landing impact: squash scaled to fall speed, camera kick, dust
-  - air control (reduced but present)
-  - camera: spring lag, FOV widen with speed
-  - step-up onto low refuges instead of clipping
+- [x] **A1. Movement feel pass** — *done in v2.3*
+  - [x] real acceleration (54 ground / 16 air) and friction instead of instant velocity —
+        speed ramps 0 → 10.4 over ~0.2s and coasts down over ~0.4s
+  - [x] momentum preservation + **skid** on hard reverse: grip breaks for ~0.35s, so a
+        180° at speed carries you through at 6.5 m/s instead of scrubbing to 1.8
+  - [x] coyote time (0.13s) on refuge edges
+  - [x] landing impact scaled to fall speed — squash 0.93→0.58, camera kick 0.22→0.93,
+        dust count/spread scale with it, hard landings scrub 22% speed
+  - [x] reduced air control, panic-state grip loss at BURNING+
+  - [x] camera: speed widens FOV 61→69 and pushes back, softer spring, kick on landing
+  - [ ] jump buffering (press just before landing → it still fires) — *not done, hold-to-hop
+        makes it mostly moot; revisit if it feels bad*
+  - [ ] step-up onto low refuges instead of clipping — *not done; the y-damp hides it for now*
 - [ ] **A2. Physical comedy** — the design bible's "the comedy is in the physicality"
   - stumble on a bad landing, faceplant, flailing recovery
   - trip over sanderlings
@@ -126,4 +130,5 @@ Never built:
 ## Open questions
 - Does the wheeling gull mob read from the default camera angle, or does it need a
   HUD cue / lower altitude?
-- Is 504m / ~2.5 min the right beach length once movement feels better?
+- Beach length: acceleration pushed a bot lap from ~78s to ~110s (turns now cost
+  momentum). A real player is ~2.5–3 min. Still right, or trim the 504m?

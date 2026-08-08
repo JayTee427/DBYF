@@ -109,6 +109,8 @@ export class Runner {
     this.phase = 0; this.speed = 0; this.squash = 1;
     this.refuge = null; this.stepFlip = 1;
     this.vaultT = 0; this.hopCool = 0; this.leapT = -99; this.airTime = 0;
+    this.vx = 0; this.vz = 0; this.coyote = 0; this.skid = 0;
+    this.landImpact = 0; this.jumpBuffer = 0;
   }
 
   reset() {
@@ -116,6 +118,7 @@ export class Runner {
     this.vy = 0; this.kx = 0; this.kz = 0; this.facing = Math.PI / 2;
     this.grounded = true; this.phase = 0; this.speed = 0; this.refuge = null;
     this.hopCool = 0; this.airTime = 0;
+    this.vx = 0; this.vz = 0; this.coyote = 0; this.skid = 0; this.landImpact = 0;
   }
 
   /** ground height here, including whatever you're standing on */
@@ -168,19 +171,60 @@ export class Runner {
       S.stamina = clamp(S.stamina + (resting ? STAM.regenRest : STAM.regen) * dt, 0, STAM.max);
     }
 
-    // ---- integrate
+    // ---- integrate with real acceleration, so the runner has weight.
+    // Ground grips, air doesn't, and hard turns cost you speed instead of
+    // pivoting on the spot like a cursor.
+    const grounded = this.grounded;
+    const accel = grounded ? (S.heatState >= 3 ? 40 : 54) : 16;
+    const friction = grounded ? 20 : 1.2;
+    this.skid = Math.max(0, (this.skid || 0) - dt * 3);
+    if (mag > 0 && base > 0) {
+      const tvx = wishX * base, tvz = wishZ * base;
+      let dvx = tvx - this.vx, dvz = tvz - this.vz;
+      const dvl = Math.hypot(dvx, dvz);
+      if (dvl > 0.0001) {
+        // reversing hard? that's a skid, not a turn
+        const sp0 = Math.hypot(this.vx, this.vz);
+        const dot = sp0 > 0.5 ? (this.vx * wishX + this.vz * wishZ) / sp0 : 1;
+        if (dot < -0.25 && sp0 > 5.5 && grounded) {
+          this.skid = 1;                      // grip breaks immediately, recovers over ~0.35s
+          if (!this.skidSfx || S.t - this.skidSfx > 0.5) {
+            this.skidSfx = S.t;
+            AU.noise(0.22, 900, 0.05, true);
+            particles.burst(this.x, this.y + 0.05, this.z, 5,
+              { color: 0xefdcb0, size: 0.28, ttl: 0.5, vy: 0.7, spread: 1.5 });
+          }
+        }
+        const grip = accel * (this.skid > 0.3 ? 0.45 : 1);
+        const k = Math.min(1, grip * dt / dvl);
+        this.vx += dvx * k; this.vz += dvz * k;
+      }
+    } else {
+      const sp0 = Math.hypot(this.vx, this.vz);
+      if (sp0 > 0) {
+        const drop = Math.min(sp0, friction * dt);
+        this.vx -= this.vx / sp0 * drop;
+        this.vz -= this.vz / sp0 * drop;
+      }
+    }
+    const sp = Math.hypot(this.vx, this.vz);
+    if (sp > base && base > 0) { this.vx = this.vx / sp * base; this.vz = this.vz / sp * base; }
+
     const decay = Math.pow(0.02, dt);
     this.kx *= decay; this.kz *= decay;
-    this.x += (wishX * base + this.kx) * dt;
-    this.z += (wishZ * base + this.kz) * dt;
+    this.x += (this.vx + this.kx) * dt;
+    this.z += (this.vz + this.kz) * dt;
     this.x = clamp(this.x, W.xMin, W.xMax);
     this.z = clamp(this.z, W.zMin - 1.5, W.zMax);
-    this.speed = damp(this.speed, mag > 0 ? base : 0, 12, dt);
+    this.speed = Math.hypot(this.vx, this.vz);
 
     // ---- vertical
     const { y: gy, ref } = this.sample(this.x, this.z);
     this.refuge = this.grounded ? ref : this.refuge;
-    if (this.grounded && input.jump && this.hopCool <= 0) {
+    // coyote time: a fraction of a second of grace after a refuge edge, so
+    // running off a plank and jumping late still works like you meant it to
+    if (this.grounded) this.coyote = 0.13; else this.coyote -= dt;
+    if ((this.grounded || this.coyote > 0) && input.jump && this.hopCool <= 0) {
       // A sprinting jump is a LEAP: long, costly, and the only way over a
       // wide scorch band. A standing tap is a quick hop that swaps your lead
       // foot — the one bit of direct control over the per-foot gauges.
@@ -195,7 +239,7 @@ export class Runner {
         this.vy = 5.4; AU.hop();
       }
       S.plant = S.plant === 'L' ? 'R' : 'L';   // hop to rest the cooking foot
-      this.grounded = false; this.hopCool = 0.12; this.squash = 0.82;
+      this.grounded = false; this.coyote = 0; this.hopCool = 0.12; this.squash = 0.82;
       particles.burst(this.x, gy + 0.05, this.z, leaping ? 7 : 4,
         { color: 0xf0dcae, size: 0.3, ttl: 0.5, vy: 0.8, spread: leaping ? 1.6 : 0.9 });
     }
@@ -204,12 +248,18 @@ export class Runner {
       this.vy -= 15.5 * dt;
       this.y += this.vy * dt;
       if (this.y <= gy) {
-        const hard = this.vy < -6;
+        // impact scales everything: squash, dust, sound and the camera kick
+        const impact = clamp(-this.vy / 13, 0, 1);
+        const hard = impact > 0.45;
         this.y = gy; this.vy = 0; this.grounded = true; this.refuge = ref;
-        this.squash = hard ? 0.72 : 0.86;
+        this.squash = lerp(0.93, 0.58, impact);
+        this.landImpact = impact;
+        // a heavy landing scrubs some speed — you have to gather yourself
+        if (hard) { this.vx *= 0.78; this.vz *= 0.78; }
         AU.land(hard);
-        particles.burst(this.x, gy + 0.05, this.z, hard ? 8 : 5,
-          { color: inWater ? 0xcfefff : 0xf0dcae, size: 0.32, ttl: 0.55, vy: 1.0, spread: 1.3 });
+        particles.burst(this.x, gy + 0.05, this.z, Math.round(3 + impact * 12),
+          { color: inWater ? 0xcfefff : 0xf0dcae, size: 0.26 + impact * 0.25,
+            ttl: 0.5 + impact * 0.3, vy: 0.8 + impact * 1.6, spread: 1.1 + impact * 1.8 });
         if (ref && !wasGrounded) this.onRefugeLand(ref);
       }
     } else this.y = damp(this.y, gy, 22, dt);
