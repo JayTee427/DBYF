@@ -798,8 +798,9 @@ function simulate(dt) {
   }
   // humidity: nothing cools as well as it should, and you know it
   if (rate < 0 && S.weather.coolMul) rate *= S.weather.coolMul;
-  // she brought your shoes. the sand is somebody else's problem now.
-  if (S.shoes > 0) rate = Math.min(rate, -14);
+  // shoes: hugely protective, but not literal immunity — stand in a lava
+  // patch long enough and they'll still start to go
+  if (S.shoes > 0 && rate > 0) rate *= 0.12;
   if (S.invuln > 0) rate = Math.min(rate, HEAT.coolRefuge);   // the sand simply gives up
   // the planted foot takes the brunt — alternating is how you survive.
   // single shoes protect one foot only, which is very funny and quite useful.

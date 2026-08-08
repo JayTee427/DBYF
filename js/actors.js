@@ -40,7 +40,7 @@ export const GOALS = {
   island:    { icon: '\u{1F3DD}', name: 'THE BURIED HOARD', r: 5.0, beacon: 'chime',  z: [2, 14],  gauntlet: false,
                line: 'it was real. it was ALL REAL.' },
   // she came back for you. now walk to the truck like a person with shoes.
-  raptor:    { icon: '\u{1F6FB}', name: 'THE ORANGE RAPTOR', r: 6.5, beacon: 'horn', z: [23, 29], gauntlet: false,
+  raptor:    { icon: '\u{1F6FB}', name: 'THE ORANGE RAPTOR', r: 6.5, beacon: 'horn', z: [17, 22], gauntlet: false,
                line: 'we are going home. and we are getting ice cream.' },
 };
 
@@ -776,10 +776,10 @@ function buildGoal(key, x, z) {
   levelGroup.add(g);
 
   // a landmark you can see from the start line
-  const marker = emojiSprite(def.icon, 3.0);
+  const marker = emojiSprite(def.icon, key === 'raptor' ? 4.6 : 3.0);
   marker.material.fog = false; marker.material.depthTest = false;
   marker.renderOrder = 900;
-  marker.position.set(x, groundY(x, z) + 9.5, z);
+  marker.position.set(x, groundY(x, z) + (key === 'raptor' ? 11.5 : 9.5), z);
   levelGroup.add(marker);
 
   return { key, def, x, z, mesh: g, marker, reached: false };
@@ -1117,8 +1117,13 @@ export function updateEvents(dt, runner) {
                   ['dustdevil', 13], ['surfschool', 11]];
     if (S.level >= 2) pool.push(['focus', 18], ['sneaker', 14], ['wedding', 11], ['fisherman', 12]);
     if (S.level >= 3) pool.push(['grunion', 8], ['lowtide', 12], ['civilwar', 10]);
-    // rare, and she only comes if you're genuinely in trouble
-    if (S.level >= 2 && !S.shoes && !S.rescue && S.heatState >= 2) pool.push(['rescue', 7]);
+    // Rare, and gated hard: level 3+, feet genuinely in trouble, and only once
+    // you're past the halfway mark — so the truck at the top of the beach is a
+    // run you can actually win, and never appears mid-level out of nowhere.
+    const pastHalf = runner.x > lerp(W.startX, W.goalX, 0.5);
+    if (S.level >= 3 && pastHalf && !S.shoes && !S.rescue && S.heatState >= 2) {
+      pool.push(['rescue', 8]);
+    }
     let tot = 0; for (const [, w] of pool) tot += w;
     let r = Math.random() * tot; let pick = 'cloud';
     for (const [k, w] of pool) { r -= w; if (r <= 0) { pick = k; break; } }
@@ -1408,21 +1413,26 @@ export function updateRescue(dt, runner) {
     if (d < 2.4) {                                    // CAUGHT HER
       levelGroup.remove(r.mesh); levelGroup.remove(r.marker);
       S.rescue = null;
-      S.shoes = 55;
+      // short on purpose: enough to run the back half home, not a free pass
+      S.shoes = 18 + Math.random() * 12;
       S.feet.L = 0; S.feet.R = 0;
       S.health = Math.min(100, S.health + 30);
       S.stats.rescues++;
       addScore(2500);
-      bus.banner('SHOES.', 'now get to the truck');
-      toast('\u{1F45F} YOU HAVE SHOES ON. +2500');
+      bus.banner('SHOES.', 'RUN. ' + S.shoes.toFixed(0) + ' seconds.');
+      toast('\u{1F45F} SHOES ON — GO GO GO. +2500');
       AU.fanfare(); AU.shanty();
       bus.shake(0.5);
       particles.burst(runner.x, runner.y + 1.2, runner.z, 30,
         { color: 0xffd94a, size: 0.42, ttl: 1.3, vy: 3, spread: 3.4 });
       say('I love you. I love you so much. shoes.', true);
-      // the whole level becomes a walk back to the truck
-      if (S.goal) S.goal.marker.visible = false;
-      S.goal = buildGoal('raptor', W.goalX, 23 + Math.random() * 5);
+      // The truck is parked where trucks are parked: up at the top of the
+      // beach where the level already ends. She only ever reaches you in the
+      // back half (see the event gate), so it's a real run but a winnable one.
+      if (S.goal) { levelGroup.remove(S.goal.mesh); levelGroup.remove(S.goal.marker); }
+      S.goal = buildGoal('raptor', W.goalX, 17 + Math.random() * 5);
+      toast('\u{1F6FB} the truck is up at the top — ' +
+            Math.round(Math.hypot(W.goalX - runner.x, S.goal.z - runner.z)) + 'm');
       return;
     }
     if (r.patience <= 0) {
@@ -1678,7 +1688,7 @@ export function generateLevel(runner) {
   }
 
   // ---- staging posts: the beach becomes three legs, not one long jog
-  const legs = 4;
+  const legs = 5;
   for (let i = 1; i < legs; i++) {
     const cx = lerp(W.startX, W.goalX, i / legs);
     // sit it near whichever refuge is closest so it lands on the natural route

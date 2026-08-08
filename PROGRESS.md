@@ -16,7 +16,7 @@ permanent roguelike builds, a living bird flock, arcade scoring.
 | Third-person toon runner | feet visibly cook tan → red → glowing, steam and smoke |
 | Heat field | discrete lava puddles on mostly-cool sand; density scales per level *and* per difficulty |
 | Core verbs | run, sprint (stamina), hop (swaps lead foot, no burn mid-air), Shift+Space leap (~11m), **Scout** (hold Q) |
-| Beaches | 504m, ~2.5 min at a real pace, 3 checkpoint cabanas splitting it into 4 legs |
+| Beaches | **656m, ~2.3 min at a normal pace** (1.6 min flat out), 4 checkpoint cabanas splitting it into 5 legs |
 | SOLE TRAIN | combo for chaining fresh refuges without cooking a foot |
 | Goals (6) | ice cream truck, flip-flops, beach shower, umbrella camp, tide pools, rare **seal nursery** — each with its own model and audio beacon |
 | Weather (8) | clear, high noon, marine layer, golden hour, low tide, drizzle, **the wind**, **the humidity** |
@@ -199,5 +199,5 @@ shoes held over her head, waving. You have ~26 seconds to reach her.
 ## Open questions
 - Does the wheeling gull mob read from the default camera angle, or does it need a
   HUD cue / lower altitude?
-- Beach length: acceleration pushed a bot lap from ~78s to ~110s (turns now cost
-  momentum). A real player is ~2.5–3 min. Still right, or trim the 504m?
+- Beach length settled at **656m**: measured 125–153s for a normal player who grabs
+  loot, 88–96s flat out. Later levels run longer as lava density climbs.

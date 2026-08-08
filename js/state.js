@@ -14,10 +14,10 @@ export const DIFFS = {
 // World bounds. A beach is a proper journey — long enough that your build has
 // time to come together, break, and get rebuilt before you reach the end.
 export const W = {
-  xMin: -272, xMax: 272,
+  xMin: -350, xMax: 350,
   zOcean: -26, zMin: -17, zMax: 32,
-  startX: -252, startZ: 4,
-  goalX: 252,
+  startX: -328, startZ: 4,
+  goalX: 328,
 };
 
 // heat tuning
