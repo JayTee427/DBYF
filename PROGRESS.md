@@ -7,10 +7,11 @@ and what's left. Keep it current when things land.
 
 ## Where we are
 
-**v3.7** — **sections A, B and C are complete** (bar C3, cut by Jeff). Every
-mechanic in the design bible is now built. Playable end to end: third-person
-runner, endless escalating beaches, permanent roguelike builds, a living bird
-flock, arcade scoring.
+**v3.8** — **the backlog is empty.** Sections A, B and C are complete (bar C3,
+cut by Jeff), every mechanic in the design bible is built, and so is everything
+that was on the wants-list behind it. Playable end to end: third-person runner,
+endless escalating beaches, permanent roguelike builds, a living bird flock,
+arcade scoring, and now a codex that explains all of it.
 
 ### Built and working
 | System | State |
@@ -21,8 +22,11 @@ flock, arcade scoring.
 | Beaches | **656m, ~2.3 min at a normal pace** (1.6 min flat out), 4 checkpoint cabanas splitting it into 5 legs |
 | SOLE TRAIN | combo for chaining fresh refuges without cooking a foot |
 | Goals (10) | ice cream truck, flip-flops, beach shower, umbrella camp, tide pools *(gated on low tide)*, parking lot, the orange Raptor, the buried hoard, **the boardwalk stairs**, rare **seal nursery** — each with its own model and audio beacon |
-| Weather (8) | clear, high noon, marine layer, golden hour, low tide, drizzle, **the wind**, **the humidity** |
-| Events (18) | cloud shade, whale wave, sun focus, sneaker wave, dolphin escort, sea lion pile, Sandcastle Kingdom, Kite Guy, grunion run, beach wedding, Metal Detector Man, volleyball, low tide reveal, seagull civil war, fisherman's backcast, surf school, **dog + ball**, **plover nesting zone** |
+| Weather (8) | clear, high noon, marine layer, golden hour, low tide, drizzle, **the wind**, **the humidity** — and beaches now **change weather partway through** |
+| Events (18) | cloud shade, whale wave, sun focus, sneaker wave, dolphin escort, sea lion pile, Sandcastle Kingdom, Kite Guy, grunion run, beach wedding, Metal Detector Man, volleyball, low tide reveal, seagull civil war, fisherman's backcast, surf school, **dog + ball**, **plover nesting zone + the volunteer docent** |
+| Set pieces (9) | boardwalk, sandcastle kingdom, old pier, towel village, **lifeguard tower**, **volleyball court**, **storm drain**, **rock jetty**, **bonfire pit** |
+| Onboarding | **codex** off the title screen (4 tabs, full item list with locked entries showing how to earn them), **pause screen** spelling out your whole build, **16 first-time-only lessons** that fire once ever and are remembered forever |
+| Mutators (8) | earned rule-changes you switch on before a run — barefoot, one pocket, no refuges, double flock, greased, hurrying sun, cursed-only, pea soup. They stack, up to ×5.25 score. |
 | Items (31) | permanent for the run, 3 slots (4 with shorts), auto-pickup with the ejected item dropping on the sand, 10 actives on [E], 8 synergies, cursed items, single-shoe items that protect one foot, **6-7** instant invincibility |
 | Birds (9) | gulls wheel overhead in a growing mob → peel off into telegraphed dives → **steal an item you can chase down**; Heermann's thief, plover broken-wing con, willet tripwires, least terns, pelican squadrons, vulture, falcon lock-on, bald eagle, and the Wash Prophet |
 | Arcade | Hall of Soles **persisted to `scores.json`**, 3-initial entry, podiatrist report card, 4 difficulties, **attract-mode ghost runner** burning to death on loop under the board |
@@ -231,29 +235,25 @@ shoes held over her head, waving. You have ~26 seconds to reach her.
 
 ---
 
-# WHAT'S STILL MISSING (as of v3.7)
+# WHAT'S STILL MISSING (as of v3.8)
 
-Every mechanic described in [DESIGN.md](DESIGN.md) is now built. What remains is
-either **cut by Jeff** or **new ideas that were never in the bible**:
+**Nothing on the backlog.** Every mechanic in [DESIGN.md](DESIGN.md) is built,
+and so is every item that was sitting behind it on the wants-list. What's left
+is only what Jeff cut on purpose:
 
-**Cut, on purpose**
 - Toe-dig (slows gameplay)
 - Colourblind / high-contrast lava mode
-- Daily seeds and shareable beach codes
-- Dignity currency, zinc-oxide war paint
+- Daily seeds and shareable beach codes *(the generator is fully seeded, so this
+  stays cheap if it's ever wanted)*
+- Dignity currency, zinc-oxide war paint cosmetics
 
-**Built but thinner than it could be**
-- **Onboarding** — seven tutorial toasts for 40 items, 18 events, 12 abilities and
-  9 birds. No pause screen (Esc) showing your build, no codex. *This is the
-  biggest remaining gap, and the only one a new player would actually feel.*
-- **Plover nesting zone** has no furious volunteer docent chasing you off.
-- **Weather never transitions mid-level** — the marine layer should burn off.
-
-**Never designed, just wanted**
-- Five more set pieces: lifeguard tower climb, volleyball court, storm drain,
-  rock jetty, bonfire pit. The chunk system makes each one function.
-- Report card naming your run ("The Sandal Incident").
-- Unlockable difficulty modifiers; a full item codex.
+**Ideas that have never been written down as tasks** — genuinely new territory,
+not leftovers:
+- A second biome. Everything is one beach; a rocky cove or a boardwalk pier
+  district would reuse the whole chunk system.
+- Co-op or a shared-seed race against a friend's ghost.
+- The docent could escalate — a second visit brings a supervisor.
+- Bosses: a single enormous gull with a health bar, once every ten beaches.
 
 ---
 
@@ -270,14 +270,24 @@ items at once. Measured curve over three real bot runs: 14 → 19 → 21 → 23.
 A **YOUR CAREER** panel on the title screen shows lifetime stats, a
 "16 / 37 BEACH ITEMS DISCOVERED" bar, and the three unlocks you're closest to.
 Stored in localStorage (personal), unlike `scores.json` (shared).
-*Still could add:* unlockable difficulty modifiers, and a full item codex.
+Both follow-ups — **difficulty modifiers and the item codex** — landed in v3.8.
 
-## 2. Onboarding & a codex
-40 items, 20 events, 12 abilities, 9 birds. Seven tutorial toasts is not enough,
-and there's no way to check what anything does mid-run.
-- Pause screen (Esc) lists your build with full descriptions and cooldowns.
-- A "what is all this" page off the title screen.
-- First-time-only toasts: the first gull raid, first chest, first synergy.
+## 2. ~~Onboarding & a codex~~ — DONE in v3.8
+The single biggest thing a new player would have felt. Three parts:
+- **The codex** — a `📖 WHAT IS ALL THIS?` button on the title screen opens four
+  tabs: *THE POINT* (the whole game in six short sections, including the things
+  nobody would guess — that hopping swaps your lead foot, that items combine by
+  tag), *ITEMS* (all 40, with locked ones showing **exactly how to earn them**,
+  so the codex doubles as a to-do list), *BIRDS* (all ten, what each actually
+  does), and *THE BEACH* (every goal, all 9 set pieces, 18 events, 8 weathers).
+- **The pause screen** — ESC now spells out your whole build: every item with
+  its full description, live cooldowns, charges, which foot a single shoe took,
+  active synergies, and what the build adds up to as plain percentages. Plus
+  the full control list and your current vitals.
+- **16 first-time-only lessons** (`LESSONS` in `profile.js`) that fire the first
+  time each thing ever happens to you and are then never shown again — held in
+  the profile, not the run. Measured: **7 fire naturally across the first two
+  beaches**, 0 repeat on a second run.
 
 ## 3. ~~Goals need different verbs~~ — DONE in v3.6 (light touch, Jeff's call)
 Three goals now have a beat of character; the rest stay instant so the win is
@@ -304,22 +314,53 @@ cause you can see. Measured 1.258 → 1.510 at the same spot.
 seed on the report card, and let a seed be typed in. Wordle-shaped virality for
 almost no work — the generator is already fully seeded.
 
-## 6. More set pieces
-The chunk system (v3.4) makes these cheap now — each is one function.
-- **The lifeguard tower climb** — go up, get a free full-beach scout, gulls nest up there.
-- **The volleyball court** — roped, flat, cool, with a live game you get hit by.
-- **The storm drain** — a cool concrete channel running to the sea, and something lives in it.
-- **The rock jetty** — a long spine of boulders out into the water, cool but total bird exposure.
-- **The bonfire pit** — last night's fire, still hot. Rings of scorched sand.
+## 6. ~~More set pieces~~ — DONE in v3.8 (the pool is now 9)
+- **THE LIFEGUARD TOWER** — four ramp landings up to a deck. Standing on it
+  marks every item and chest on the stretch *and* draws the cool route, once,
+  for +400. The only free full-beach read in the game.
+- **THE VOLLEYBALL COURT** — packed cool sand ringed by lava, with a live game
+  overhead. The ball is not aimed at you, which makes being hit by it worse.
+- **THE STORM DRAIN** — a concrete channel from the dunes to the sea, cool the
+  whole length. Something is living in the outfall and it does not want visitors.
+- **THE ROCK JETTY** — twelve boulder clusters out past the shoreline. Cool
+  every step, and standing on it *adds attention every second* — you're the only
+  thing above the waterline and every bird can see you.
+- **THE BONFIRE PIT** — last night's fire, still breathing, rings of baked sand,
+  and four camp chairs that are genuinely safe to stand on. Standing in the pit
+  itself cooks both feet at 34/s, which is entirely your own fault.
 
-## 7. Smaller polish worth doing
-- ~~Ghost runner in attract mode~~ — **done v3.7** (C5).
-- ~~Level-256 kill screen~~ — **done v3.7** (C4).
-- ~~Dog + ball~~ — **done v3.7**, with the cool paw-print trail.
-- ~~Plover nesting zones~~ — **done v3.7**. No docent yet: the rope, the sign and
-  the attention spike carry it. A furious volunteer who *chases* you is still open.
-- Report card could name your run: "The Sandal Incident", "Death by Pelican".
-- Weather could transition *mid-level* (marine layer burning off, as designed).
+## 7. ~~Smaller polish~~ — all done
+- ~~Ghost runner in attract mode~~ — **v3.7** (C5).
+- ~~Level-256 kill screen~~ — **v3.7** (C4).
+- ~~Dog + ball~~ — **v3.7**, with the cool paw-print trail.
+- ~~Plover nesting zones~~ — **v3.7**, and **v3.8** gave her the docent: she has
+  a clipboard, a sun hat and a lanyard, she marches at **7.4 m/s** (between walk
+  6.0 and sprint 10.4, so sprinting genuinely escapes her and walking does not),
+  she shouts six different things, and catching you costs you a stumble, guilt,
+  pinned attention and a photograph "for the newsletter". Verified both ways.
+- ~~Report card names your run~~ — **v3.8**. 19 candidates each score themselves
+  against the run's stats **per beach** (so a name describes what the run was
+  *like*, not just how long it lasted), loudest wins, and a run with nothing to
+  say for itself gets "AN ORDINARY AFTERNOON".
+- ~~Weather transitions mid-level~~ — **v3.8**. `S.weather` is now a live mutable
+  blend rather than one of the constants, so everything reading `.heat` / `.aggro`
+  / `.wash` / `.gust` follows a transition without knowing one exists. Seven
+  routes (marine burns off, drizzle passes, fog rolls in, the wind drops, the
+  humidity finally breaks…), ~42% of beaches from level 2, scheduled 38–84s in.
+  The name and music flip at the halfway point. Measured marine→noon: fog
+  78→360, heat 0.70→1.34, over 11s with no snap.
+
+## 8. ~~Unlockable difficulty modifiers~~ — DONE in v3.8
+**MAKE IT WORSE** — eight earned rule changes on the title screen, each a real
+change to how the game runs rather than a hidden multiplier. The panel stays
+hidden entirely until you've earned one, so a new player never sees it.
+Verified individually: *strictly barefoot* (0 footwear in 400 rolls), *one
+pocket* (maxSlots 1), *no refuges* (the procedural spine never spawns — 143
+refuges down to 35, all of them belonging to set pieces), *the whole flock*
+(7 gulls → 13), *greased*, *the sun is in a hurry* (sun pressure 1.05 → 1.21
+at 40s), *cursed only* (0 non-cursed in 300 rolls), *pea soup* (fog clamped to
+8/46). They stack: all seven at once is **×5.25 score**, and killed the test bot
+on beach one.
 
 ## Audit note (v3.2)
 An audit against the design bible found **five items wired into the game that

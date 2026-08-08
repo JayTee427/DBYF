@@ -7,7 +7,7 @@ import {
   toon, meshOf, emojiSprite, labelSprite, faceSprite, Particles, Footprints,
 } from './engine.js';
 import { S, W, HEAT, STAM, DIFFS, effHeat, effAggro, hasItem, footState } from './state.js';
-import { scene, groundY, heatAt, wetness, waveZ, waveEdgeAt, shadeAt, pickWeather, applyWeather, buildScenery, resetTide, rebuildTerrain, WEATHER } from './world.js';
+import { scene, groundY, heatAt, wetness, waveZ, waveEdgeAt, shadeAt, pickWeather, applyWeather, scheduleWeatherTurn, buildScenery, resetTide, rebuildTerrain, WEATHER } from './world.js';
 import { AU, say, OW } from './audio.js';
 import { ITEMS, rollItem, buildStats, removeItem, grant } from './items.js';
 import { flock, clearFlock, spawnPlover, spawnProphet, spawnWillets, buildSanderlings, sanderlingNear } from './birds.js';
@@ -185,9 +185,9 @@ export class Runner {
     if (hasItem('sandals')) base *= 1.04;
     if (S.guilt > 0) base *= 0.78;                // moving slowly, full of regret
     // the wind shoves you around in gusts you have to lean against
-    if (S.weather && S.weather.gust) {
+    if (S.weather && S.weather.gust > 0.02) {
       const g = (Math.sin(S.t * 0.55) * 0.6 + Math.sin(S.t * 1.7 + 1.3) * 0.4);
-      const power = Math.max(0, g) * 7.5;
+      const power = Math.max(0, g) * 7.5 * S.weather.gust;   // eases off as the wind drops
       this.kx += Math.sin(S.windDir) * power * dt;
       this.kz += Math.cos(S.windDir) * power * dt;
       if (power > 5 && Math.random() < dt * 3) {
@@ -199,8 +199,10 @@ export class Runner {
     if (S.ev && S.ev.escort > 0) base *= 1.06;    // the dolphins are rooting for you
     if (S.mode === 'scout') base = 0;
 
-    if (wantSprint) S.stamina = clamp(S.stamina - STAM.drain * dt / S.diff.stam, 0, STAM.max);
-    else {
+    if (wantSprint) {
+      S.stamina = clamp(S.stamina - STAM.drain * dt / S.diff.stam, 0, STAM.max);
+      if (S.stamina <= 0) bus.teach('stamina');
+    } else {
       const resting = (this.refuge || inWater) && mag === 0;
       S.stamina = clamp(S.stamina + (resting ? STAM.regenRest : STAM.regen) * dt, 0, STAM.max);
     }
@@ -284,6 +286,7 @@ export class Runner {
         this.vy = 5.4; AU.hop();
       }
       S.plant = S.plant === 'L' ? 'R' : 'L';   // hop to rest the cooking foot
+      if (!leaping) bus.teach('hop');
       this.grounded = false; this.coyote = 0; this.hopCool = 0.12; this.squash = 0.82;
       particles.burst(this.x, gy + 0.05, this.z, leaping ? 7 : 4,
         { color: 0xf0dcae, size: 0.3, ttl: 0.5, vy: 0.8, spread: leaping ? 1.6 : 0.9 });
@@ -408,7 +411,7 @@ export class Runner {
       S.stamina = clamp(S.stamina + 12, 0, STAM.max);
     }
     if (ref.type === 'towel' && ref.crab && !ref.crabSprung) {
-      ref.crabSprung = true; S.stats.crabs++;
+      ref.crabSprung = true; S.stats.crabs++; bus.teach('crab');
       S.health -= 6;
       // launched straight off the towel, arms everywhere
       this.vy = 4.2; this.grounded = false;
@@ -431,7 +434,7 @@ export class Runner {
     const fz = this.z - Math.sin(this.facing) * side;
     if (!inWater && !this.refuge) {
       const h = heatAt(this.x, this.z, S.t);
-      if (h > HEAT.safe) S.stats.hotSteps++;
+      if (h > HEAT.safe) { S.stats.hotSteps++; if (h > 0.9) bus.teach('lava'); }
       const wet = wetness(this.z, S.t);
       const col = foot > 78 ? 0x2a1208 : wet > 0.4 ? 0x6b5540 : 0xd8bc90;
       prints.stamp(fx, gy, fz, this.facing, col, foot > 78 ? 0.75 : 0.4);
@@ -871,6 +874,109 @@ function dropProp(p) {
   if (p.pad) { const i = S.coolPads.indexOf(p.pad); if (i >= 0) S.coolPads.splice(i, 1); }
   const j = S.ev.props.indexOf(p); if (j >= 0) S.ev.props.splice(j, 1);
 }
+/**
+ * THE VOLUNTEER DOCENT. She has a clipboard, a hat, and a lanyard, and she
+ * has been standing next to this rope since six in the morning waiting for
+ * exactly one person to do exactly what you just did.
+ */
+function buildDocent(x, z) {
+  const g = new THREE.Group();
+  const body = meshOf(new THREE.CapsuleGeometry(0.3, 0.72, 4, 8), 0x3f8f5a);   // volunteer polo
+  body.position.y = 1.0; g.add(body);
+  const head = meshOf(new THREE.SphereGeometry(0.26, 10, 8), 0xe8c9a4);
+  head.position.y = 1.62; g.add(head);
+  const hat = meshOf(new THREE.CylinderGeometry(0.5, 0.5, 0.06, 12), 0xd8cbae);
+  hat.position.y = 1.82; g.add(hat);
+  const crown = meshOf(new THREE.CylinderGeometry(0.24, 0.26, 0.22, 10), 0xd8cbae);
+  crown.position.y = 1.92; g.add(crown);
+  // the arms go up when she is upset, which is always
+  const arms = [];
+  for (const s of [-1, 1]) {
+    const arm = meshOf(new THREE.CapsuleGeometry(0.09, 0.5, 4, 6), 0xe8c9a4);
+    arm.position.set(s * 0.36, 1.08, 0); g.add(arm); arms.push(arm);
+  }
+  const board = meshOf(new THREE.BoxGeometry(0.42, 0.54, 0.05), 0xd9c48a);
+  board.position.set(0.44, 1.0, 0.22); g.add(board);
+  const legs = meshOf(new THREE.CapsuleGeometry(0.13, 0.5, 4, 6), 0x8a8577);
+  legs.position.y = 0.42; g.add(legs);
+  g.position.set(x, groundY(x, z), z);
+  levelGroup.add(g);
+  return {
+    mesh: g, arms, x, z, homeX: x, homeZ: z,
+    state: 'idle', fury: 0, cd: 0, said: 0, ang: 0,
+  };
+}
+const DOCENT_LINES = [
+  'THAT IS A PROTECTED NESTING AREA',
+  'THE ROPE IS THERE FOR A REASON',
+  'I HAVE YOUR DESCRIPTION',
+  'THOSE BIRDS ARE THREATENED, SIR',
+  'I AM WRITING THIS DOWN',
+  'DO YOU KNOW HOW RARE THEY ARE',
+];
+/** She marches. She does not run — she doesn't have to. She's very patient. */
+function updateDocent(dc, runner, dt) {
+  const dx = runner.x - dc.x, dz = runner.z - dc.z;
+  const d = Math.hypot(dx, dz) || 1;
+
+  if (dc.state === 'chase') {
+    dc.fury -= dt;
+    // 7.4 m/s: faster than a walk, slower than a sprint. You CAN outrun her.
+    // You just have to spend the stamina, which is the whole point.
+    const sp = 7.4;
+    dc.x += dx / d * sp * dt;
+    dc.z = clamp(dc.z + dz / d * sp * dt, -6, 26);
+    dc.mesh.rotation.y = Math.atan2(dx, dz);
+    // both arms up, waving, the entire time
+    const w = Math.sin(S.t * 11) * 0.5;
+    dc.arms[0].rotation.z = 2.2 + w; dc.arms[1].rotation.z = -2.2 - w;
+    dc.mesh.position.set(dc.x, groundY(dc.x, dc.z) + Math.abs(Math.sin(S.t * 9)) * 0.07, dc.z);
+
+    if (S.t - dc.said > 3.4) {
+      dc.said = S.t;
+      toast('\u{1F9D1}‍\u{1F52C} "' + DOCENT_LINES[Math.floor(Math.random() * DOCENT_LINES.length)] + '"', 'warn');
+      say(DOCENT_LINES[Math.floor(Math.random() * DOCENT_LINES.length)], false);
+    }
+    // she catches you: a lecture, a photograph, and a citation
+    if (d < 1.7 && dc.cd <= 0) {
+      dc.cd = 4;
+      const a = Math.atan2(-dx, -dz);
+      runner.kx += Math.sin(a) * 9; runner.kz += Math.cos(a) * 9;
+      runner.trip('stumble', '\u{1F4CB} CITED BY A VOLUNTEER');
+      S.guilt = Math.max(S.guilt, 6);
+      S.aggro = 100;
+      bus.flash(0.5);                        // she takes a photo of you for the record
+      bus.shake(0.5);
+      toast('\u{1F4F8} she has photographed you for the newsletter', 'bad');
+      AU.reject();
+      say('I am so sorry. I am so, so sorry.', true);
+    }
+    dc.cd -= dt;
+    if (dc.fury <= 0 || d > 42) { dc.state = 'return'; toast('\u{1F9D1}‍\u{1F52C} "...and STAY out"', 'warn'); }
+
+  } else if (dc.state === 'return') {
+    const hx = dc.homeX - dc.x, hz = dc.homeZ - dc.z;
+    const hd = Math.hypot(hx, hz);
+    if (hd < 0.6) { dc.state = 'idle'; }
+    else {
+      dc.x += hx / hd * 4.2 * dt; dc.z += hz / hd * 4.2 * dt;
+      dc.mesh.rotation.y = Math.atan2(hx, hz);
+      dc.mesh.position.set(dc.x, groundY(dc.x, dc.z), dc.z);
+    }
+    dc.arms[0].rotation.z = damp(dc.arms[0].rotation.z, 0, 5, dt);
+    dc.arms[1].rotation.z = damp(dc.arms[1].rotation.z, 0, 5, dt);
+
+  } else {
+    // idle: pacing her little patch of rope, keeping an eye on you
+    dc.ang += dt * 0.5;
+    dc.x = dc.homeX + Math.sin(dc.ang) * 2.4;
+    dc.mesh.position.set(dc.x, groundY(dc.x, dc.z), dc.z);
+    dc.mesh.rotation.y = d < 22 ? Math.atan2(dx, dz) : Math.sin(dc.ang) * 1.2;
+    dc.arms[0].rotation.z = damp(dc.arms[0].rotation.z, 0, 5, dt);
+    dc.arms[1].rotation.z = damp(dc.arms[1].rotation.z, 0, 5, dt);
+  }
+}
+
 export function spawnCloud(x, z) {
   const mesh = cloudMesh();
   mesh.position.set(x, 22, z); scene.add(mesh);
@@ -1077,8 +1183,10 @@ export function fireEvent(kind, runner) {
     const bird = emojiSprite('\u{1F423}', 1.5); bird.position.set(0, 2.4, -d / 2 - 0.2); g.add(bird);
     const px = clamp(runner.x + 22 + Math.random() * 26, W.xMin, W.goalX - 14);
     const pz = clamp(6 + Math.random() * 12, 0, 20);
-    addProp('nesting', g, px, pz, { r: 6.2, caught: false });
+    const nest = addProp('nesting', g, px, pz, { r: 6.2, caught: false });
     coolPad(px, pz, 6.0);            // it IS lovely cool sand. that's the trap.
+    // and there is a volunteer. she has a clipboard. she has been waiting all week.
+    nest.docent = buildDocent(px, pz - 7);
     toast('\u{1F423} a roped-off plover nest. stay out of it.');
 
   } else if (kind === 'dustdevil') {
@@ -1365,18 +1473,88 @@ function updateProps(dt, runner) {
         dropProp(p);
       }
 
+    } else if (p.kind === 'court') {
+      // a real game, played over your head. the ball is not aimed at you,
+      // which somehow makes getting hit by it worse.
+      p.ballAng += dt * 1.7;
+      const bx = p.x + Math.sin(p.ballAng) * 6.4;
+      const bz = p.z + Math.cos(p.ballAng * 0.8) * 3.4;
+      const by = groundY(bx, bz) + 2.2 + Math.abs(Math.sin(p.ballAng * 2)) * 2.6;
+      p.ball.position.set(bx, by, bz);
+      const bd = Math.hypot(runner.x - bx, runner.z - bz);
+      if (bd < 1.5 && Math.abs((runner.y + 1.0) - by) < 1.3 && S.t - (p.hitAt || 0) > 3) {
+        p.hitAt = S.t;
+        const a = Math.atan2(runner.x - bx, runner.z - bz);
+        runner.kx += Math.sin(a) * 15; runner.kz += Math.cos(a) * 15;
+        runner.trip('faceplant', '\u{1F3D0} TAKEN OUT BY A SERVE');
+        bus.shake(0.9);
+        AU.thwack();
+        say('who SERVES like that?!', true);
+      } else if (!p.praised && d < 4 && S.t - (p.hitAt || 0) > 3) {
+        p.praised = true;
+        toast('\u{1F3D0} packed court sand. blessedly flat.  +200'); addScore(200);
+      }
+
+    } else if (p.kind === 'drain') {
+      // whatever is down there does not want visitors
+      if (!p.woke && d < p.r) {
+        p.woke = true;
+        const a = Math.atan2(runner.x - p.x, runner.z - p.z);
+        runner.kx += Math.sin(a) * 11; runner.kz += Math.cos(a) * 11;
+        runner.trip('stumble', '\u{1F441} SOMETHING MOVED IN THE DRAIN');
+        S.aggro = Math.min(100, S.aggro + 14);
+        AU.screech(); bus.shake(0.8);
+        particles.burst(p.x, groundY(p.x, p.z) + 0.6, p.z, 14,
+          { color: 0x4a4a44, size: 0.34, ttl: 1.0, vy: 2.2, spread: 2.2 });
+        say(['NOPE. NOPE. NOPE.', 'I did not see that. I saw nothing.'][Math.floor(Math.random() * 2)], true);
+      }
+      if (p.woke && d > p.r + 6) p.woke = false;
+
+    } else if (p.kind === 'jetty') {
+      // standing on the rocks past the shoreline: nowhere to hide, and they
+      // all know it. Being out here at all costs you attention every second.
+      if (d < p.r && runner.refuge) {
+        S.aggro = Math.min(100, S.aggro + 9 * dt * effAggro());
+        if (!p.warned) {
+          p.warned = true;
+          toast('\u{1FAA8} out on the rocks. every bird can see you.', 'warn');
+        }
+      }
+
+    } else if (p.kind === 'bonfire') {
+      // last night's fire, still going. It breathes.
+      const pulse = 0.9 + Math.sin(S.t * 3.4) * 0.12 + Math.random() * 0.06;
+      p.ember.scale.set(pulse, 0.35 * pulse, pulse);
+      if (Math.random() < dt * 9) {
+        particles.spawn(p.x + (Math.random() - 0.5) * 1.6, groundY(p.x, p.z) + 0.5,
+          p.z + (Math.random() - 0.5) * 1.6,
+          { color: 0xff8a2a, size: 0.2, ttl: 1.4, vy: 3.2, opacity: 0.8, grow: 0.4 });
+      }
+      if (d < 2.6 && !S.invuln) {
+        // you are standing IN a fire pit. this is your own fault.
+        S.feet.L = Math.min(100, S.feet.L + 34 * dt);
+        S.feet.R = Math.min(100, S.feet.R + 34 * dt);
+        if (!p.warned) { p.warned = true; toast('\u{1F525} THAT IS A FIRE. AN ACTUAL FIRE.', 'bad'); AU.sizzle(); }
+      } else if (d > 4) p.warned = false;
+
     } else if (p.kind === 'nesting') {
       if (!p.caught && d < p.r) {
         p.caught = true;
         S.aggro = 100;
         S.guilt = 7;
-        bus.banner('GET OUT OF THE NEST', 'a volunteer docent has seen you');
+        bus.banner('GET OUT OF THE NEST', 'the volunteer docent has seen you');
         toast('\u{1F423} EVERY BIRD ON THE BEACH IS NOW AWARE OF YOU', 'bad');
         AU.screech(); AU.gullCall();
         bus.shake(0.7);
         say(['I am going! I am going!', 'it was cool sand! I am WEAK!'][Math.floor(Math.random() * 2)], true);
+        // and she is coming. she has been waiting all week for this.
+        if (p.docent && p.docent.state !== 'chase') {
+          p.docent.state = 'chase'; p.docent.fury = 16; p.docent.said = 0;
+          toast('\u{1F9D1}‍\u{1F52C} "EXCUSE ME. EXCUSE ME!"', 'bad');
+        }
       }
       if (p.caught && d > p.r + 4) p.caught = false;   // re-arm if you go back in
+      if (p.docent) updateDocent(p.docent, runner, dt);
 
     } else if (p.kind === 'dustdevil') {
       p.life -= dt;
@@ -1586,7 +1764,216 @@ function chunkTowelVillage(cx, rng) {
   return 'THE TOWEL VILLAGE';
 }
 
-const CHUNKS = [chunkBoardwalk, chunkMaze, chunkPier, chunkTowelVillage];
+/**
+ * A lifeguard tower with a climbable ramp. Go up and the whole beach lays
+ * itself out for you — but it's the tallest thing for 300m and the gulls
+ * have opinions about who gets to stand on it.
+ */
+function chunkTower(cx, rng) {
+  const cz = 14 + rng() * 5;
+  hotPad(cx, cz - 5, 11);
+  hotPad(cx + 7, cz + 2, 8);
+  const g = new THREE.Group();
+  // legs
+  for (const [ox, oz] of [[-2, -2], [2, -2], [-2, 2], [2, 2]]) {
+    const leg = meshOf(new THREE.CylinderGeometry(0.16, 0.19, 3.2, 6), 0xd9b98a);
+    leg.position.set(ox, 1.6, oz); g.add(leg);
+  }
+  const deck = meshOf(new THREE.BoxGeometry(5.0, 0.32, 5.0), 0xefd9ae);
+  deck.position.y = 3.3; g.add(deck);
+  const hut = meshOf(new THREE.BoxGeometry(3.4, 1.9, 3.4), 0xf4e6c8);
+  hut.position.y = 4.45; g.add(hut);
+  const roof = meshOf(new THREE.ConeGeometry(3.1, 1.1, 4), 0xe4553f);
+  roof.rotation.y = Math.PI / 4; roof.position.y = 5.9; g.add(roof);
+  for (const s of [-1, 1]) {
+    const rail = meshOf(new THREE.BoxGeometry(5.0, 0.1, 0.1), 0xefd9ae);
+    rail.position.set(0, 4.1, s * 2.4); g.add(rail);
+  }
+  // the ramp up — three landings you actually run up
+  const steps = [];
+  for (let i = 0; i < 4; i++) {
+    const t = i / 3;
+    const sx = cx - 7 + t * 5.2, sz = cz - 4.5 + t * 2.2, sy = 0.55 + t * 2.55;
+    const st = meshOf(new THREE.BoxGeometry(2.4, 0.26, 2.0), 0xd9b98a);
+    st.position.set(sx, groundY(sx, sz) + sy, sz);
+    levelGroup.add(st);
+    addRefuge(sx, sz, 1.25, sy + 0.13, 'wood', st);
+    steps.push(st);
+  }
+  g.position.set(cx, groundY(cx, cz), cz);
+  levelGroup.add(g);
+  // the deck itself: a big safe platform that hands you a free scout
+  const top = { x: cx, z: cz, r: 2.6, h: 3.46, type: 'wood', mesh: g,
+                crab: false, crabSprung: false, tower: true };
+  S.refuges.push(top);
+  const flag = emojiSprite('\u{1F6A9}', 2.0);
+  flag.position.set(cx, groundY(cx, cz) + 7.4, cz);
+  levelGroup.add(flag);
+  return 'THE LIFEGUARD TOWER';
+}
+
+/**
+ * A roped volleyball court. Flat, packed, cool underfoot — and there is a
+ * game on. The ball comes at you and it does not care that you are on fire.
+ */
+function chunkCourt(cx, rng) {
+  const cz = 8 + rng() * 6;
+  hotPad(cx - 12, cz, 9);
+  hotPad(cx + 12, cz, 9);
+  coolPad(cx, cz, 9.5);                 // packed court sand: the safe island
+  const g = new THREE.Group();
+  // net
+  for (const s of [-1, 1]) {
+    const post = meshOf(new THREE.CylinderGeometry(0.11, 0.13, 3.0, 6), 0xcfc3ae);
+    post.position.set(0, 1.5, s * 4.2); g.add(post);
+  }
+  const net = meshOf(new THREE.BoxGeometry(0.08, 1.0, 8.4), 0xf2ecdc, { outline: false });
+  net.position.y = 2.3; g.add(net);
+  // boundary rope on little pegs
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2;
+    const peg = meshOf(new THREE.CylinderGeometry(0.05, 0.05, 0.5, 4), 0xe6dcc6);
+    peg.position.set(Math.cos(a) * 9.2, 0.25, Math.sin(a) * 6.4); g.add(peg);
+  }
+  g.position.set(cx, groundY(cx, cz), cz);
+  levelGroup.add(g);
+  const ball = meshOf(new THREE.SphereGeometry(0.32, 10, 8), 0xf5f0e0);
+  levelGroup.add(ball);
+  // the live game runs off an empty marker so addProp can't move the court
+  const p = addProp('court', new THREE.Group(), cx, cz, { r: 9.5, ballAng: rng() * 6.3, rally: 0 });
+  p.ball = ball;
+  const sign = emojiSprite('\u{1F3D0}', 2.2);
+  sign.position.set(cx, groundY(cx, cz) + 4.8, cz);
+  levelGroup.add(sign);
+  return 'THE VOLLEYBALL COURT';
+}
+
+/**
+ * A concrete storm drain running down to the sea. Cool, shaded, dead
+ * straight — a motorway through the worst ground on the beach. Something
+ * lives in it.
+ */
+function chunkDrain(cx, rng) {
+  hotPad(cx - 8, 8, 11);
+  hotPad(cx + 8, 8, 11);
+  hotPad(cx, 18, 9);
+  const g = new THREE.Group();
+  const z0 = 20, z1 = -8;
+  const floor = meshOf(new THREE.BoxGeometry(3.6, 0.3, z0 - z1), 0xbdb9ae);
+  floor.position.set(0, -0.18, (z0 + z1) / 2); g.add(floor);
+  for (const s of [-1, 1]) {
+    const wall = meshOf(new THREE.BoxGeometry(0.35, 1.1, z0 - z1), 0xa9a599);
+    wall.position.set(s * 1.95, 0.3, (z0 + z1) / 2); g.add(wall);
+  }
+  // the outfall headwall at the top
+  const head = meshOf(new THREE.BoxGeometry(5.4, 2.2, 0.6), 0x9e9a8e);
+  head.position.set(0, 0.9, z0 + 0.4); g.add(head);
+  const mouth = meshOf(new THREE.BoxGeometry(3.0, 1.4, 0.3), 0x2c2a26);
+  mouth.position.set(0, 0.7, z0 + 0.1); g.add(mouth);
+  g.position.set(cx, groundY(cx, 6), 0);
+  levelGroup.add(g);
+  // the channel is one long cool refuge, in segments so you can leave it
+  for (let z = z1 + 2; z < z0; z += 3.4) {
+    coolPad(cx, z, 2.6);
+    addRefuge(cx, z, 1.7, 0.02, 'concrete', null);
+  }
+  // and something is in there
+  addProp('drain', new THREE.Group(), cx, z0 - 1, { r: 3.4, woke: false });
+  const sign = emojiSprite('\u{1F6B0}', 2.0);
+  sign.position.set(cx, groundY(cx, z0) + 4.0, z0 + 1);
+  levelGroup.add(sign);
+  return 'THE STORM DRAIN';
+}
+
+/**
+ * A spine of boulders running out into the water. Cool the whole way,
+ * and the single most exposed place on the beach — every bird can see you
+ * and there is nowhere to go but forward or back.
+ */
+function chunkJetty(cx, rng) {
+  hotPad(cx - 9, 12, 10);
+  hotPad(cx + 9, 12, 10);
+  const n = 12;
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1);
+    const rz = lerp(18, -22, t);
+    const jitter = (rng() - 0.5) * 1.6;
+    const rx = cx + jitter;
+    const g = new THREE.Group();
+    for (let b = 0; b < 3; b++) {
+      const s = 1.1 + rng() * 0.9;
+      const rock = meshOf(new THREE.DodecahedronGeometry(s, 0), 0x8c8880);
+      rock.position.set((rng() - 0.5) * 2.4, s * 0.4, (rng() - 0.5) * 2.0);
+      rock.rotation.set(rng() * 3, rng() * 3, rng() * 3);
+      g.add(rock);
+    }
+    g.position.set(rx, groundY(rx, rz) - 0.2, rz);
+    levelGroup.add(g);
+    addRefuge(rx, rz, 2.0, 0.9, 'rock', g);
+  }
+  // out past the shoreline you are the only thing standing above the water,
+  // and every bird on the beach gets a clear look at you. That's the price.
+  addProp('jetty', new THREE.Group(), cx, -6, { r: 15 });
+  const sign = emojiSprite('\u{1F30A}', 2.2);
+  sign.position.set(cx, groundY(cx, 19) + 4.4, 19);
+  levelGroup.add(sign);
+  return 'THE ROCK JETTY';
+}
+
+/**
+ * Last night's bonfire. The pit is still going, and the sand in rings
+ * around it has been baking since midnight. Somebody left the good chair.
+ */
+function chunkBonfire(cx, rng) {
+  const cz = 10 + rng() * 6;
+  hotPad(cx, cz, 13);
+  const g = new THREE.Group();
+  // stone ring
+  for (let i = 0; i < 11; i++) {
+    const a = (i / 11) * Math.PI * 2;
+    const st = meshOf(new THREE.DodecahedronGeometry(0.42 + rng() * 0.2, 0), 0x6e6a62);
+    st.position.set(Math.cos(a) * 2.0, 0.2, Math.sin(a) * 2.0);
+    st.rotation.set(rng() * 3, rng() * 3, rng() * 3);
+    g.add(st);
+  }
+  // charred logs
+  for (let i = 0; i < 5; i++) {
+    const log = meshOf(new THREE.CylinderGeometry(0.16, 0.2, 2.2, 6), 0x3a332c);
+    log.rotation.set(Math.PI / 2, rng() * 3, (rng() - 0.5) * 0.8);
+    log.position.set((rng() - 0.5) * 1.2, 0.22, (rng() - 0.5) * 1.2);
+    g.add(log);
+  }
+  const ember = meshOf(new THREE.SphereGeometry(0.8, 8, 6), 0xff5a1e, { outline: false });
+  ember.position.y = 0.3; ember.scale.y = 0.35; g.add(ember);
+  g.position.set(cx, groundY(cx, cz), cz);
+  levelGroup.add(g);
+  addProp('bonfire', g, cx, cz, { r: 3.4, ember });
+  // somebody's camp chairs survived the night — and they are cool to stand on
+  for (let i = 0; i < 4; i++) {
+    const a = rng() * Math.PI * 2, rr = 5.5 + rng() * 4;
+    const chx = cx + Math.cos(a) * rr, chz = clamp(cz + Math.sin(a) * rr * 0.7, -2, 22);
+    const ch = new THREE.Group();
+    const seat = meshOf(new THREE.BoxGeometry(1.3, 0.16, 1.2), [0x4a90d9, 0xd94a5c, 0x4ad98a, 0xd9b84a][i]);
+    seat.position.y = 0.62; ch.add(seat);
+    const back = meshOf(new THREE.BoxGeometry(1.3, 1.0, 0.14), [0x4a90d9, 0xd94a5c, 0x4ad98a, 0xd9b84a][i]);
+    back.position.set(0, 1.15, -0.55); ch.add(back);
+    for (const [ox, oz] of [[-0.55, -0.5], [0.55, -0.5], [-0.55, 0.5], [0.55, 0.5]]) {
+      const lg = meshOf(new THREE.CylinderGeometry(0.05, 0.05, 0.62, 4), 0x55524c);
+      lg.position.set(ox, 0.31, oz); ch.add(lg);
+    }
+    ch.rotation.y = rng() * Math.PI * 2;
+    ch.position.set(chx, groundY(chx, chz), chz);
+    levelGroup.add(ch);
+    addRefuge(chx, chz, 1.15, 0.72, 'chair', ch);
+  }
+  const sign = emojiSprite('\u{1F525}', 2.2);
+  sign.position.set(cx, groundY(cx, cz) + 4.6, cz);
+  levelGroup.add(sign);
+  return 'THE BONFIRE PIT';
+}
+
+const CHUNKS = [chunkBoardwalk, chunkMaze, chunkPier, chunkTowelVillage,
+                chunkTower, chunkCourt, chunkDrain, chunkJetty, chunkBonfire];
 /** Drop a couple of authored chunks along the beach, spaced apart. */
 function placeSetPieces(rng) {
   if (S.isIsland) return;
@@ -1761,6 +2148,7 @@ function openChest(ch, runner) {
   particles.burst(ch.x, groundY(ch.x, ch.z) + 1.2, ch.z, 22,
     { color: 0xffd94a, size: 0.4, ttl: 1.1, vy: 2.6, spread: 2.6 });
   S.stats.chests++;
+  bus.teach('chest');
 
   const roll = Math.random();
   if (roll < 0.24) {
@@ -1937,12 +2325,15 @@ export function generateLevel(runner) {
   S.goal = buildGoal(gk, W.goalX, gz);
   // the asphalt gauntlet: blacktop is worse than sand, and it knows it
   if (GOALS[gk].asphalt) S.hotPads.push({ x: W.goalX - 12, z: gz - 3, r: 15 });
+  scheduleWeatherTurn(rng);          // some beaches change their mind on you
 
   // ---- the spine: a chain of refuges you can actually chain
   S.refuges.push(buildRefuge('towel', W.startX, W.startZ, rng));
   let x = W.startX, z = W.startZ;
   const maxGap = 9.5 + Math.min(5, S.level * 0.5);
-  while (x < W.goalX - 14) {
+  // NO REFUGES: the procedural spine never gets laid down, so the only safe
+  // ground on the whole beach is whatever the set pieces bring with them
+  while (!S.mut.noclock && x < W.goalX - 14) {
     const gap = 6.5 + rng() * (maxGap - 6.5);
     x += gap;
     z = clamp(z + (rng() - 0.5) * 13, -3, 20);
@@ -1985,6 +2376,8 @@ export function generateLevel(runner) {
     // sit it right on the spine so following the route always hits it
     let near = null, bd = 1e9;
     for (const r of S.refuges) { const d = Math.abs(r.x - cx); if (d < bd) { bd = d; near = r; } }
+    // with NO REFUGES there is no spine to hug, so they just space themselves
+    if (bd > 30) near = null;
     const px = near ? near.x : cx;
     const cz = clamp(near ? near.z : 8, -2, 22);
     S.checkpoints.push(buildCheckpoint(px, cz, i - 1));

@@ -56,12 +56,19 @@ export const S = {
   coolPads: [], hotPads: [], guilt: 0, prophet: null, readT: 0, windDir: 0,
   chests: [], crabs: [], mapFrags: 0, islandPending: false, keysUsed: false,
   rescue: null, shoes: 0, setPieces: [], goalHold: 0, killScreen: false,
+  // a beach is allowed to change its mind halfway through
+  wxFrom: null, wxTo: null, wxT: 0, wxDur: 11, wxFlipped: false,
+  wxTurn: null, wxTurnAt: 0, wxAnnounce: null,
   ev: null,
   tutorial: 0,
   lastVoice: 0, lastNag: 0, lastSqueak: 0,
   streak: 0,
   forceGoal: null, forceWeather: null,
+  // optional earned rule-changes, switched on before a run starts
+  mut: {}, mutMult: 1, runName: '',
 };
+/** Is this mutator in force for the current run? */
+export function mutOn(id) { return !!S.mut[id]; }
 
 export function freshStats() {
   return {
@@ -83,7 +90,8 @@ export function footState(v) { return v < 25 ? 0 : v < 48 ? 1 : v < 70 ? 2 : v <
  * back half of a long beach into a different game.
  */
 export function sunPressure() {
-  return 1 + Math.min(0.20, (S.levelTime / 150) * 0.20);
+  const rate = S.mut.sprint ? 4 : 1;         // THE SUN IS IN A HURRY
+  return 1 + Math.min(0.20 * rate, (S.levelTime / 150) * 0.20 * rate);
 }
 // escalation comes mostly from more lava patches, so the per-level heat ramp is gentle
 export function effHeat() {

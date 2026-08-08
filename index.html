@@ -74,6 +74,25 @@
   #career .next div{display:flex;justify-content:space-between;gap:14px;color:#cfe9ff}
   #career .next span:last-child{color:#b9a486}
 
+  /* earned ways to make the beach worse */
+  #mutbox{min-width:min(430px,94vw);max-width:min(720px,94vw)}
+  #mutbox .ch{font-family:Consolas,monospace;font-size:11px;letter-spacing:.24em;color:#ffb3a2;
+    text-align:center;margin-bottom:8px}
+  #mutbox .ch span{color:var(--gold);letter-spacing:.1em}
+  #mutrow{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+  .mut{background:rgba(40,18,14,.7);border:2px solid #7a4436;border-radius:3px;color:#e8bfae;
+    padding:5px 10px;font-family:Consolas,monospace;font-size:10.5px;letter-spacing:.05em;
+    cursor:pointer;text-align:left;max-width:212px}
+  .mut b{display:block;font-size:11px;color:#ffcdb8;letter-spacing:.08em}
+  .mut i{display:block;font-style:normal;font-size:9.5px;color:#b99a8c;margin-top:1px}
+  .mut .mm{color:var(--gold)}
+  .mut:hover{border-color:#ff8a6a;background:#4a1e14}
+  .mut.on{background:#6e1f12;border-color:var(--hot);color:#fff}
+  .mut.on b{color:#fff}
+  .mut.on i{color:#ffc4b2}
+  .mut.locked{opacity:.42;cursor:not-allowed;border-color:#4a3a34}
+  .mut.locked:hover{background:rgba(40,18,14,.7);border-color:#4a3a34}
+
   #keys{display:flex;gap:16px;flex-wrap:wrap;justify-content:center;font-size:12px;color:#cfe9ff;opacity:.92}
   #keys b{color:var(--gold);font-family:Consolas,monospace}
   #volrow{display:flex;align-items:center;gap:10px;background:var(--panel);border:2px solid var(--line);
@@ -84,6 +103,37 @@
   #volrow .hint{color:#b9a486;font-size:10.5px}
   #coin{font-size:12px;letter-spacing:.24em;color:#fff;animation:blink 1.1s steps(2) infinite}
   @keyframes blink{50%{opacity:0}}
+  #btnCodex{background:var(--panel);border:2px solid #7fb2d8;border-radius:4px;color:#cfe9ff;
+    padding:7px 18px;font-family:inherit;font-size:12.5px;letter-spacing:.1em;cursor:pointer}
+  #btnCodex:hover{background:#16334a;border-color:#fff;color:#fff}
+
+  /* ---------------- codex ---------------- */
+  #codex{background:radial-gradient(ellipse at 50% 0%,rgba(60,90,130,.4),transparent 60%),rgba(8,7,14,.94);
+    justify-content:flex-start;padding-top:22px;gap:10px}
+  #cxHead{font-family:Consolas,monospace;font-weight:bold;font-size:clamp(17px,3vw,27px);
+    letter-spacing:.16em;color:var(--sand);text-shadow:0 0 18px #ff8c1a}
+  #cxTabs{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+  .cxtab{background:var(--panel);border:2px solid var(--line);border-radius:3px;color:#ffdf9e;
+    padding:7px 15px;font-family:Consolas,monospace;font-size:11.5px;letter-spacing:.13em;cursor:pointer}
+  .cxtab:hover{background:#472c0c;color:#fff}
+  .cxtab.on{background:#5c3a0e;border-color:#fff;color:#fff}
+  #cxBody{width:min(940px,95vw);max-height:64vh;overflow:auto;text-align:left;padding:16px 20px}
+  #cxBody h4{font-family:Consolas,monospace;font-size:12px;letter-spacing:.22em;color:var(--gold);
+    margin:14px 0 6px;border-bottom:1px solid rgba(255,184,77,.3);padding-bottom:3px}
+  #cxBody h4:first-child{margin-top:0}
+  #cxBody p{font-size:12.5px;line-height:1.65;color:#ffe9bf;margin-bottom:7px}
+  #cxBody p b{color:var(--gold);font-family:Consolas,monospace}
+  #cxBody p i{color:#cfe9ff;font-style:italic}
+  .cxgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(272px,1fr));gap:5px 14px}
+  .cxrow{display:flex;gap:8px;align-items:flex-start;padding:3px 0}
+  .cxrow .ci{font-size:19px;width:24px;text-align:center;flex:none;line-height:1.2}
+  .cxrow .cn{font-family:Consolas,monospace;font-size:11px;letter-spacing:.04em;color:#fff}
+  .cxrow .cd{font-size:11px;color:#ffdf9e;opacity:.88}
+  .cxrow .ck{font-family:Consolas,monospace;font-size:9.5px;color:var(--cool)}
+  .cxrow.locked .ci,.cxrow.locked .cn{color:#6f6152}
+  .cxrow.locked .cd{color:#6f6152;font-style:italic}
+  .cxrow.cursed .cn{color:#ff8877}
+  .cxnote{font-size:11.5px;color:#b9a486;text-align:center;margin-top:10px;font-style:italic}
 
   /* ---------------- HUD ---------------- */
   #hud{position:fixed;inset:0;pointer-events:none;z-index:20}
@@ -185,8 +235,31 @@
   @keyframes tup{0%{opacity:0;transform:translateY(16px)}12%{opacity:1}72%{opacity:1}100%{opacity:0;transform:translateY(-26px)}}
 
   /* ---------------- pause / interlevel / end ---------------- */
-  #pause{background:rgba(0,0,0,.6);cursor:pointer}
+  #pause{background:rgba(0,0,0,.72);cursor:pointer}
   #pause h2{font-family:Consolas,monospace;font-size:34px;letter-spacing:.22em}
+  #pauseCols{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;align-items:flex-start;
+    max-height:66vh;overflow:auto}
+  .pcol{min-width:min(400px,92vw);max-width:440px;text-align:left}
+  .pfoot{font-size:12px;color:#ffdf9e}
+  .pfoot b{color:var(--gold);font-family:Consolas,monospace}
+  /* one carried item, spelled out properly */
+  .pitem{display:flex;gap:9px;align-items:flex-start;padding:5px 0;
+    border-bottom:1px solid rgba(255,184,77,.18)}
+  .pitem .pic{font-size:22px;line-height:1.1;width:26px;text-align:center;flex:none}
+  .pitem .pbody{flex:1;min-width:0}
+  .pitem .pname{font-family:Consolas,monospace;font-size:12px;letter-spacing:.06em;color:#fff}
+  .pitem .pdesc{font-size:11.5px;color:#ffdf9e;opacity:.9}
+  .pitem .pmeta{font-family:Consolas,monospace;font-size:10px;color:var(--cool);margin-top:2px}
+  .pitem .pmeta .cursed{color:#ff8877}
+  .pitem.empty .pname{color:#a89070}
+  #pSyn{margin-top:8px;display:flex;flex-direction:column;gap:3px}
+  #pSyn div{font-family:Consolas,monospace;font-size:11.5px;color:var(--gold)}
+  #pSyn div i{color:#ffe9bf;font-style:italic;font-weight:normal}
+  #pStats,#pVitals,#pKeys{font-family:Consolas,monospace;font-size:12px}
+  #pStats .row,#pVitals .row,#pKeys .row{padding:1.5px 0}
+  #pStats .good span:last-child{color:#8affc1}
+  #pStats .bad span:last-child{color:#ff8877}
+  #pKeys .row span:first-child{color:var(--gold)}
 
   #interlevel{background:rgba(8,6,14,.62)}
   #ilTitle{font-family:Consolas,monospace;font-weight:bold;font-size:clamp(20px,4vw,40px);
@@ -199,6 +272,11 @@
   #verdict{font-family:Consolas,monospace;font-weight:bold;font-size:clamp(22px,4.6vw,46px);
     letter-spacing:.1em;color:var(--hot);text-shadow:0 0 22px #ff3300,3px 3px 0 #4d0f00}
   #epitaph{font-size:14px;font-style:italic;color:#ffdf9e}
+  /* every run earns a name off its own stats */
+  #runName{font-family:Consolas,monospace;font-weight:bold;font-size:clamp(13px,2.1vw,19px);
+    letter-spacing:.14em;color:var(--gold);text-shadow:0 0 14px rgba(255,217,74,.55);
+    border-top:2px solid rgba(255,184,77,.45);border-bottom:2px solid rgba(255,184,77,.45);
+    padding:5px 22px}
   #card{min-width:410px;max-height:44vh;overflow:auto}
   .row{display:flex;justify-content:space-between;gap:26px;font-family:Consolas,monospace;
     font-size:13px;padding:2px 0;color:var(--sand)}
@@ -247,6 +325,10 @@
   </div>
 
   <div id="career" class="panel"></div>
+  <div id="mutbox" class="panel hidden">
+    <div class="ch">⚠ MAKE IT WORSE ⚠ <span id="mutMult"></span></div>
+    <div id="mutrow"></div>
+  </div>
 
   <div id="keys">
     <span><b>WASD</b> run</span><span><b>MOUSE</b> look</span><span><b>SHIFT</b> sprint</span>
@@ -260,6 +342,20 @@
     <span class="hint">M mute &nbsp;•&nbsp; N music &nbsp;•&nbsp; [ ] volume</span>
   </div>
   <div id="coin">◎ INSERT SAND DOLLAR ◎ &nbsp; PICK A DIFFICULTY</div>
+  <button id="btnCodex">📖 WHAT IS ALL THIS?</button>
+</div>
+
+<!-- ================= CODEX ================= -->
+<div id="codex" class="screen hidden">
+  <div id="cxHead">📖 WHAT IS ALL THIS?</div>
+  <div id="cxTabs">
+    <button class="cxtab on" data-tab="basics">THE POINT</button>
+    <button class="cxtab" data-tab="items">ITEMS</button>
+    <button class="cxtab" data-tab="birds">BIRDS</button>
+    <button class="cxtab" data-tab="beach">THE BEACH</button>
+  </div>
+  <div id="cxBody" class="panel"></div>
+  <div class="btns"><button id="btnCodexBack">BACK</button></div>
 </div>
 
 <!-- ================= HUD ================= -->
@@ -311,7 +407,22 @@
 <!-- ================= PAUSE ================= -->
 <div id="pause" class="screen hidden">
   <h2 class="mono">PAUSED</h2>
-  <p>click to resume — your feet appreciate the break</p>
+  <div id="pauseCols">
+    <div class="panel pcol">
+      <div class="cardhead">🎒 WHAT YOU ARE CARRYING</div>
+      <div id="pBuild"></div>
+      <div id="pSyn"></div>
+      <div class="cardhead" style="margin-top:12px">📊 WHAT IT ADDS UP TO</div>
+      <div id="pStats"></div>
+    </div>
+    <div class="panel pcol">
+      <div class="cardhead">🎮 CONTROLS</div>
+      <div id="pKeys"></div>
+      <div class="cardhead" style="margin-top:12px">🔥 HOW YOU ARE DOING</div>
+      <div id="pVitals"></div>
+    </div>
+  </div>
+  <p class="pfoot">click, or <b>ESC</b>, to resume — your feet appreciate the break</p>
 </div>
 
 <!-- ================= LEVEL CLEAR ================= -->
@@ -325,6 +436,7 @@
 <div id="end" class="screen hidden">
   <div id="verdict">YOUR FEET GAVE OUT</div>
   <div id="epitaph"></div>
+  <div id="runName"></div>
   <div class="panel">
     <div class="cardhead">🦶 PODIATRIST'S REPORT CARD 🦶</div>
     <div id="card"></div>
@@ -343,6 +455,6 @@
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js" } }
 </script>
-<script type="module" src="js/main.js?v=3.7.0"></script>
+<script type="module" src="js/main.js?v=3.8.0"></script>
 </body>
 </html>

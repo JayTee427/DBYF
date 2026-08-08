@@ -45,6 +45,61 @@ export const UNLOCKS = [
   { item: 'sixseven',  stat: 'bestScore', at: 670000, text: 'score 670,000' },
 ];
 
+/**
+ * Things the game explains exactly once, ever — the first time they happen
+ * to you. After that it shuts up about them, because you know.
+ */
+export const LESSONS = {
+  lava:     ['\u{1F525} that orange patch is real lava — the plain sand is survivable, the puddles are not'],
+  refuge:   ['\u{1F3D6} anything not sand is a refuge. chain fresh ones without cooking a foot for a SOLE TRAIN.'],
+  hop:      ['\u{1FA78} tap SPACE to hop — it swaps your lead foot, and you can\'t burn mid-air'],
+  raid:     ['\u{1F426} they only dive once the mob overhead is big enough. watch the shadows.'],
+  theft:    ['\u{1F985} it TOOK that. chase it down and you get it back.'],
+  chest:    ['\u{1FA99} chests are always out in the worst ground. that is the deal.'],
+  synergy:  ['\u{2B50} two items just combined. the pause screen (ESC) lists what you\'re carrying.'],
+  crab:     ['\u{1F980} about half the towels have a crab under them. sorry.'],
+  swap:     ['\u{1F392} three pockets. a fourth item pushes your oldest out onto the sand — go back for it.'],
+  water:    ['\u{1F30A} the sea is a full reset. it is also where the birds do their shopping.'],
+  scout:    ['\u{1F50D} hold Q any time to lift the camera and read the beach ahead'],
+  cursed:   ['\u{2620} cursed items are genuinely a gamble. they give more than they take, usually.'],
+  ability:  ['\u{26A1} press E to use it. the pause screen shows the cooldown.'],
+  stamina:  ['\u{1F3C3} sprinting burns stamina. standing still on a refuge gets it back fastest.'],
+  prophet:  ['\u{1F9A2} he never attacks. stand near him and he tells you something — maybe true.'],
+  weather:  ['\u{1F324} some beaches change weather partway through. the sand changes with it.'],
+};
+
+/**
+ * MUTATORS — optional ways to make the beach worse, earned by playing.
+ * Each one is a real rule change, not a slider, and each pays a score
+ * multiplier. They stack, and stacking them is the point.
+ */
+export const MUTATORS = [
+  { id: 'barefoot', icon: '\u{1F9B6}', name: 'STRICTLY BAREFOOT',
+    blurb: 'no footwear spawns. at all. ever.',
+    need: ['beaches', 5], mult: 0.35 },
+  { id: 'onepocket', icon: '\u{1F45D}', name: 'ONE POCKET',
+    blurb: 'you may carry exactly one thing',
+    need: ['beaches', 10], mult: 0.55 },
+  { id: 'noclock', icon: '\u{1F6AB}', name: 'NO REFUGES',
+    blurb: 'the procedural towels and driftwood are gone. set pieces only.',
+    need: ['bestCombo', 15], mult: 0.75 },
+  { id: 'flocked', icon: '\u{1F426}', name: 'THE WHOLE FLOCK',
+    blurb: 'twice the birds, and they start angry',
+    need: ['dodges', 60], mult: 0.6 },
+  { id: 'greased', icon: '\u{1F9F4}', name: 'GREASED',
+    blurb: 'everything is surf wax. you slide constantly.',
+    need: ['leaps', 50], mult: 0.4 },
+  { id: 'sprint', icon: '\u{23F1}', name: 'THE SUN IS IN A HURRY',
+    blurb: 'the sun climbs four times as fast',
+    need: ['bestLevel', 10], mult: 0.7 },
+  { id: 'cursed', icon: '\u{2620}', name: 'CURSED ONLY',
+    blurb: 'every item that spawns is a bad idea',
+    need: ['deaths', 15], mult: 0.8 },
+  { id: 'blind', icon: '\u{1F32B}', name: 'PEA SOUP',
+    blurb: 'permanent fog. you cannot see the goal or the lava coming.',
+    need: ['beaches', 20], mult: 0.9 },
+];
+
 const BLANK = {
   stats: {
     beaches: 0, deaths: 0, runs: 0, items: 0, crabs: 0, faceplants: 0, trips: 0,
@@ -53,6 +108,8 @@ const BLANK = {
     bestCombo: 0, bestLevel: 0, bestScore: 0,
   },
   unlocked: [],
+  taught: [],
+  mutators: [],          // which ones are switched ON for the next run
 };
 
 export const PROFILE = {
@@ -64,12 +121,44 @@ export const PROFILE = {
       if (raw && raw.stats) {
         this.data.stats = Object.assign({}, BLANK.stats, raw.stats);
         this.data.unlocked = Array.isArray(raw.unlocked) ? raw.unlocked : [];
+        this.data.taught = Array.isArray(raw.taught) ? raw.taught : [];
+        this.data.mutators = Array.isArray(raw.mutators) ? raw.mutators : [];
       }
     } catch { /* first run */ }
     return this.data;
   },
   save() { try { localStorage.setItem(KEY, JSON.stringify(this.data)); } catch { } },
   reset() { this.data = JSON.parse(JSON.stringify(BLANK)); this.save(); },
+
+  /**
+   * Has this lesson already been taught? Returns the line the first time and
+   * null forever after, so callers can just do `const l = PROFILE.teach('lava')`.
+   */
+  teach(id) {
+    if (!LESSONS[id] || this.data.taught.includes(id)) return null;
+    this.data.taught.push(id);
+    this.save();
+    return LESSONS[id][0];
+  },
+  lessonsLeft() { return Object.keys(LESSONS).length - this.data.taught.length; },
+
+  // ---- mutators ----
+  mutatorEarned(m) { return (this.data.stats[m.need[0]] || 0) >= m.need[1]; },
+  mutatorOn(id) { return this.data.mutators.includes(id); },
+  toggleMutator(id) {
+    const i = this.data.mutators.indexOf(id);
+    if (i >= 0) this.data.mutators.splice(i, 1); else this.data.mutators.push(id);
+    this.save();
+    return this.mutatorOn(id);
+  },
+  /** The ones actually in force, filtered to what's been earned. */
+  activeMutators() {
+    return MUTATORS.filter(m => this.mutatorOn(m.id) && this.mutatorEarned(m));
+  },
+  /** Combined score multiplier from every mutator switched on. */
+  mutatorMult() {
+    return this.activeMutators().reduce((a, m) => a + m.mult, 1);
+  },
 
   isUnlocked(item) {
     if (STARTING_ITEMS.includes(item) || CHEST_ONLY.includes(item)) return true;

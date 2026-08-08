@@ -254,10 +254,17 @@ export const SYNERGIES = [
 ];
 
 // ---------------- weighted roll ----------------
+const FOOTWEAR = ['sandals', 'flipflop', 'boot', 'boots'];
 export function rollItem(rng, favourRare) {
   // only things you've actually unlocked can wash up on the beach
-  const keys = Object.keys(ITEMS).filter(k => ITEMS[k].w > 0 && PROFILE.isUnlocked(k));
-  if (!keys.length) return 'sandals';
+  let keys = Object.keys(ITEMS).filter(k => ITEMS[k].w > 0 && PROFILE.isUnlocked(k));
+  // mutators prune the pool before anything is weighted
+  if (S.mut.barefoot) keys = keys.filter(k => !FOOTWEAR.includes(k));
+  if (S.mut.cursed) {
+    const bad = keys.filter(k => ITEMS[k].cursed);
+    if (bad.length) keys = bad;
+  }
+  if (!keys.length) return 'duck';           // a beach always gives you something
   const weight = (k) => ITEMS[k].w * (favourRare && ITEMS[k].rarity >= 2 ? 2.4 : 1);
   let tot = 0;
   for (const k of keys) tot += weight(k);
@@ -301,6 +308,7 @@ export function buildStats() {
     eagle: false, slots: 0, slip: false,
     warn: false, identify: false, gold: false, keys: false,
   };
+  if (S.mut.greased) out.slip = true;        // GREASED: the whole beach is wax
   for (const s of S.slots) {
     const p = s.def.passive || {};
     if (p.slots) out.slots += p.slots;
@@ -344,6 +352,7 @@ export function checkSynergies() {
   for (const sy of now) {
     if (!lastSyn.has(sy.id)) {
       bus.banner(sy.name, sy.blurb);
+      bus.teach('synergy');
       AU.shanty();
       say(sy.name, true);
     }
@@ -363,11 +372,13 @@ export function grant(key, silent) {
   S.stats.items++;
   if (!silent) {
     AU.pickup();
+    if (inst.def.active) bus.teach('ability');
     bus.toast('+ ' + inst.def.icon + ' ' + inst.def.name + ' — ' + inst.def.desc,
       inst.def.cursed ? 'warn' : '');
     if (inst.foot) bus.toast('...it fits the ' + (inst.foot === 'L' ? 'LEFT' : 'RIGHT') + ' foot. good luck.');
+    if (dropped) bus.teach('swap');
     if (dropped) bus.toast('↻ ' + dropped.def.icon + ' ' + dropped.def.name + ' drops on the sand', 'warn');
-    if (inst.def.cursed) say('this feels like a mistake.', false);
+    if (inst.def.cursed) { say('this feels like a mistake.', false); bus.teach('cursed'); }
     if (key === 'duck') say('quack.', false);
   }
   checkSynergies();

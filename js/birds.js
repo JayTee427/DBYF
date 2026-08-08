@@ -209,7 +209,8 @@ export function clearFlock() { for (const b of [...flock]) killBird(b); }
 /** How many gulls should be loitering, given how interesting you are. */
 function desiredGulls() {
   if (S.eagleTimer > 0) return 0;                 // nobody argues with the eagle
-  return Math.min(8, Math.floor(S.aggro / 12));
+  const cap = S.mut.flocked ? 16 : 8;             // THE WHOLE FLOCK
+  return Math.min(cap, Math.floor(S.aggro / (S.mut.flocked ? 6 : 12)));
 }
 const AIRBORNE = ['circle', 'swoop', 'join', 'peel'];
 function gullsWatching() { return flock.filter(b => b.kind === 'gull' && AIRBORNE.includes(b.state)).length; }
@@ -249,6 +250,7 @@ function launchRaid(runner) {
   bus.shake(0.6);
   say('here they come!', true);
   S.stats.raids++;
+  bus.teach('raid');
 }
 
 // ---------------- theft ----------------
@@ -271,6 +273,7 @@ function stealFrom(b, runner, wantBest) {
   AU.poof();
   say('hey! HEY! that is mine!', true);
   S.stats.thefts++;
+  bus.teach('theft');
   return true;
 }
 function recoverFrom(b) {
@@ -836,6 +839,7 @@ function updateProphet(b, dt, runner) {
       const line = pool[Math.floor(Math.random() * pool.length)];
       bus.toast('\u{1F9D9} "' + line + '"');
       S.stats.prophecies++;
+      bus.teach('prophet');
       AU.tone(392, 0.2, 'sine', 0.05); AU.tone(523, 0.26, 'sine', 0.04, 0.18);
       say(line, true);
     }

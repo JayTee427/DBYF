@@ -9,7 +9,7 @@ import {
 } from './state.js';
 import {
   scene, groundY, heatAt, wetness, waveZ, shadeAt, updateTide, updateOcean,
-  paintSand, updateHaze, faceHaze, sunSprite, WEATHER,
+  paintSand, updateHaze, faceHaze, sunSprite, tickWeatherTurn, transitionWeather, WEATHER,
 } from './world.js';
 import {
   Runner, GOALS, generateLevel, updateEvents, checkCheckpoints, checkChests,
@@ -19,7 +19,7 @@ import {
 import {
   ITEMS, SYNERGIES, buildStats, activeSynergies, grant, removeItem, findItem,
   readyActive, tickCooldowns, checkSynergies, resetSynergies, hasItem as hasIt,
-  footHeatMul,
+  footHeatMul, rollItem,
 } from './items.js';
 import {
   flock, updateBirds, updateSanderlings, scatterAt, clearFlock,
@@ -28,7 +28,7 @@ import {
 import { wireBus } from './bus.js';
 import { AU, say, OW } from './audio.js';
 import { MUSIC } from './music.js';
-import { PROFILE, UNLOCKS, STARTING_ITEMS } from './profile.js';
+import { PROFILE, UNLOCKS, STARTING_ITEMS, MUTATORS } from './profile.js';
 
 // ---------------- renderer & camera ----------------
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -60,9 +60,14 @@ const D = {
   banner: $('banner'), ability: $('ability'), swapHint: $('swapHint'), syn: $('syn'),
   invuln: $('invuln'),
   ilTitle: $('ilTitle'), ilLines: $('ilLines'), ilNext: $('ilNext'),
-  verdict: $('verdict'), epitaph: $('epitaph'), card: $('card'), finalScore: $('finalScore'),
+  verdict: $('verdict'), epitaph: $('epitaph'), runName: $('runName'),
+  card: $('card'), finalScore: $('finalScore'),
   initials: $('initials'), cells: [$('c0'), $('c1'), $('c2')], hs: $('hsrows'),
   hsPage: $('hsPage'), career: $('career'),
+  pBuild: $('pBuild'), pSyn: $('pSyn'), pStats: $('pStats'),
+  pKeys: $('pKeys'), pVitals: $('pVitals'),
+  codex: $('codex'), cxBody: $('cxBody'),
+  mutbox: $('mutbox'), mutrow: $('mutrow'), mutMult: $('mutMult'),
 };
 
 // ---------------- toasts & score ----------------
@@ -130,7 +135,19 @@ wireBus({
   shake: (v) => { cam.shake = Math.max(cam.shake, v); hitStop(v * 0.05); },
   instant: instantPickup,
   flash: (a) => flashScreen(a, 220),
+  teach,
 });
+/**
+ * Say something once, the first time it ever happens to you, and then never
+ * again on any run. Held in the profile, not the run, so a veteran isn't
+ * lectured and a beginner isn't left to guess.
+ */
+function teach(id) {
+  const line = PROFILE.teach(id);
+  if (!line) return;
+  // let the moment itself land first, then explain it
+  setTimeout(() => { toast(line, 'tip'); AU.tick(); }, 850);
+}
 
 // ---------------- input ----------------
 const keys = new Set();
@@ -145,7 +162,10 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyM') { const m = AU.toggleMute(); toast(m ? '🔇 MUTED' : '🔊 SOUND ON'); syncVolUI(); }
   if (e.code === 'BracketLeft') { AU.setVolume(AU.volume - 0.1); syncVolUI(); }
   if (e.code === 'BracketRight') { AU.setVolume(AU.volume + 0.1); syncVolUI(); }
-  if (e.code === 'Escape' && S.mode === 'play') setPaused(true);
+  if (e.code === 'Escape') {
+    if (S.mode === 'play') setPaused(true);
+    else if (S.mode === 'paused') setPaused(false);
+  }
 });
 addEventListener('keyup', (e) => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
@@ -350,7 +370,7 @@ function refillWetGear(inWater) {
 // ---------------- message-in-a-bottle: reveal a cool route ----------------
 let routeMarks = [];
 function clearRoute() { for (const m of routeMarks) scene.remove(m); routeMarks = []; }
-function buildCoolRoute() {
+function buildCoolRoute(quiet) {
   clearRoute();
   if (!S.goal) return;
   let x = runner.x, z = runner.z;
@@ -369,12 +389,16 @@ function buildCoolRoute() {
     m.rotation.x = Math.PI;
     scene.add(m); routeMarks.push(m);
   }
-  toast('\u{1F4EC} the bottle shows a cool path');
+  if (!quiet) toast('\u{1F4EC} the bottle shows a cool path');
 }
 
 // ---------------- flow ----------------
 function startRun(diffKey) {
   S.diffKey = diffKey; S.diff = DIFFS[diffKey];
+  // mutators are locked in at the start of a run and can't be changed mid-run
+  const muts = PROFILE.activeMutators();
+  S.mut = {}; for (const m of muts) S.mut[m.id] = true;
+  S.mutMult = PROFILE.mutatorMult();
   S.mode = 'play'; S.level = 1; S.score = 0; S.runTime = 0;
   S.feet.L = 0; S.feet.R = 0; S.health = 100; S.stamina = STAM.max;
   S.aggro = 0; S.slots = []; S.stats = freshStats(); S.tutorial = 0;
@@ -391,6 +415,12 @@ function startRun(diffKey) {
   AU.ensure(); AU.resume(); tryLock();
   if (AU.ctx) { MUSIC.init(AU.ctx, AU.master); MUSIC.start(S.weather.key); }
   announce();
+  if (muts.length) {
+    setTimeout(() => {
+      banner('MADE IT WORSE ×' + S.mutMult.toFixed(2), muts.map(m => m.name).join(' · '));
+      for (const m of muts) toast(m.icon + ' ' + m.name + ' — ' + m.blurb, 'warn');
+    }, 1200);
+  }
 }
 function announce() {
   toast(S.goal.def.icon + '  FIND: ' + S.goal.def.name);
@@ -404,9 +434,85 @@ function announce() {
   };
   say(openers[S.goal.key] || 'off we go.', true);
 }
+/**
+ * The pause screen is the only place you can actually READ your build.
+ * Forty items with one-line HUD labels is not a game you can plan in, so
+ * everything you're carrying gets spelled out here in full.
+ */
+function renderPause() {
+  const build = buildStats();
+  const pct = (v) => (v >= 1 ? '+' : '−') + Math.round(Math.abs(v - 1) * 100) + '%';
+
+  D.pBuild.innerHTML = (S.slots.length ? S.slots : []).map((s) => {
+    const d = s.def;
+    const meta = [];
+    if (d.active) {
+      meta.push(s.cd > 0 ? `[E] ${d.active.label} — ${s.cd.toFixed(1)}s` : `[E] ${d.active.label} — READY`);
+    }
+    if (s.charges !== Infinity) meta.push(s.charges + ' left');
+    if (s.shield > 0) meta.push('shield ' + Math.round(s.shield));
+    if (s.foot) meta.push('fits the ' + (s.foot === 'L' ? 'LEFT' : 'RIGHT') + ' foot');
+    if (d.cursed) meta.push('<span class="cursed">CURSED</span>');
+    return `<div class="pitem"><div class="pic">${d.icon}</div><div class="pbody">
+      <div class="pname">${d.name}</div><div class="pdesc">${d.desc}</div>
+      ${meta.length ? `<div class="pmeta">${meta.join('  ·  ')}</div>` : ''}</div></div>`;
+  }).join('')
+    + Array.from({ length: Math.max(0, S.maxSlots - S.slots.length) }, () =>
+      `<div class="pitem empty"><div class="pic">·</div><div class="pbody">
+        <div class="pname">EMPTY POCKET</div>
+        <div class="pdesc">run over something and it's yours</div></div></div>`).join('');
+
+  const syn = activeSynergies();
+  D.pSyn.innerHTML = syn.length
+    ? syn.map(s => `<div>★ ${s.name} — <i>${s.blurb}</i></div>`).join('')
+    : '<div style="color:#a89070">★ no synergies yet — items combine by name and by tag</div>';
+
+  const st = [
+    ['Burn rate', pct(build.heat), build.heat < 1],
+    ['Bird attention', pct(build.aggro), build.aggro < 1],
+    ['Move speed', pct(build.speed), build.speed > 1],
+    ['Stamina drain', pct(build.stam), build.stam < 1],
+    ['Blocks a bird strike', Math.round(build.guard * 100) + '%', build.guard > 0],
+    ['Loot found', pct(build.loot), build.loot > 1],
+    ['Pockets', S.maxSlots, build.slots > 0],
+  ];
+  D.pStats.innerHTML = st.map((r) => {
+    const flat = r[1] === '+0%' || r[1] === '0%' || r[1] === '−0%';
+    return `<div class="row ${flat ? '' : (r[2] ? 'good' : 'bad')}">
+      <span>${r[0]}</span><span>${r[1]}</span></div>`;
+  }).join('');
+
+  D.pKeys.innerHTML = [
+    ['WASD', 'run'], ['MOUSE', 'look around'], ['SHIFT', 'sprint (costs stamina)'],
+    ['SPACE', 'hop — swaps your lead foot, and it can\'t burn mid-air'],
+    ['SHIFT+SPACE', 'a desperate ~11m leap'],
+    ['Q (hold)', 'scout — pull the camera up and read the beach'],
+    ['E', 'use your leftmost ready ability'],
+    ['F', 'drop your oldest item on purpose'],
+    ['ESC', 'this screen'], ['M / N', 'mute / music'], ['[ ]', 'volume'],
+  ].map(r => `<div class="row"><span>${r[0]}</span> — ${r[1]}</div>`).join('');
+
+  const worst = Math.max(S.feet.L, S.feet.R);
+  D.pVitals.innerHTML = [
+    ['Beach', S.level + '  (' + S.diff.label + ')'],
+    ['Weather', S.weather ? S.weather.name : '—'],
+    ['Looking for', S.goal ? S.goal.def.icon + ' ' + S.goal.def.name : '—'],
+    ['Distance left', S.goal ? Math.round(Math.max(0, S.goal.x - runner.x)) + 'm' : '—'],
+    ['Left foot', Math.round(S.feet.L) + '%'],
+    ['Right foot', Math.round(S.feet.R) + '%'],
+    ['Health', Math.round(S.health) + '%'],
+    ['Bird suspicion', Math.round(S.aggro) + '%'],
+    ['Score so far', S.score],
+    ['Hottest foot says', HEAT_NAMES[footState(worst)]],
+  ].map(r => `<div class="row"><span>${r[0]}</span> — ${r[1]}</div>`).join('');
+}
 function setPaused(p) {
-  if (p && S.mode === 'play') { S.mode = 'paused'; D.pause.classList.remove('hidden'); document.exitPointerLock?.(); }
-  else if (!p && S.mode === 'paused') { S.mode = 'play'; D.pause.classList.add('hidden'); tryLock(); }
+  if (p && S.mode === 'play') {
+    S.mode = 'paused'; renderPause();
+    D.pause.classList.remove('hidden'); document.exitPointerLock?.();
+  } else if (!p && S.mode === 'paused') {
+    S.mode = 'play'; D.pause.classList.add('hidden'); tryLock();
+  }
 }
 D.pause.addEventListener('click', () => setPaused(false));
 document.querySelectorAll('.diffbtn').forEach(b =>
@@ -418,6 +524,179 @@ $('btnTitle').addEventListener('click', () => {
   if (AU.ctx) { MUSIC.init(AU.ctx, AU.master); MUSIC.start('title'); }
   renderScores(); renderCareer(); document.exitPointerLock?.();
 });
+
+// ============================================================
+// THE CODEX — 40 items, 9 birds, 20 events and 12 abilities is too much
+// to learn by dying. This is the page that just tells you.
+// ============================================================
+const CODEX_BIRDS = [
+  ['\u{1F426}', 'WESTERN GULL', 'The mob. They gather overhead in a slow wheel that grows as your '
+    + 'suspicion climbs, then peel off one at a time into a telegraphed dive. You get a shadow and a '
+    + 'half-second of warning. Sidestep it.'],
+  ['\u{1F985}', 'HEERMANN\'S GULL', 'The thief. It does not want to hurt you — it wants an item, and '
+    + 'if it gets one it flies off with it. Chase it down and you get the item back.'],
+  ['\u{1F423}', 'SNOWY PLOVER', 'Tiny, protected, and a liar. It fakes a broken wing to drag you off '
+    + 'your line and away from its nest. Following it always costs you.'],
+  ['\u{1F99A}', 'WILLETS & GODWITS', 'Dozing in loose groups. Sprint too close and the whole lot '
+    + 'explodes upward screaming, and every bird on the beach looks over.'],
+  ['\u{1F426}', 'LEAST TERN', 'Darts in tight circles around your head and shoves you off your line '
+    + 'for about eighteen seconds. Arrives from beach 5.'],
+  ['\u{1F9A2}', 'BROWN PELICAN', 'Squadrons of five in formation. The leader drags a patch of cool '
+    + 'shadow you can ride — and running into one knocks you flat.'],
+  ['\u{1F985}', 'TURKEY VULTURE', 'Circles patiently. It is not attacking. It is just... waiting, '
+    + 'and it would like you to know it has noticed how you\'re doing.'],
+  ['\u{1F985}', 'PEREGRINE FALCON', 'Locks on from very high, then arrives all at once. The single '
+    + 'hardest hit in the game. If you have the GoPro you get a warning arrow.'],
+  ['\u{1F985}', 'BALD EAGLE', 'Summoned by the old tuna can. He may bless you or he may pick you up '
+    + 'and carry you somewhere. Both count as an experience.'],
+  ['\u{1F9A2}', 'THE WASH PROPHET', 'One pelican per beach, standing apart from everything, who never '
+    + 'attacks. Linger near him and he tells you something. It is a coin flip whether it is true, and '
+    + 'he will not tell you which. The captain\'s pipe improves his odds.'],
+];
+const CODEX_EVENTS = [
+  ['\u{1F415}', 'DOG + BALL', 'kicks up a trail of cool damp sand — follow it'],
+  ['\u{1F423}', 'PLOVER NESTING ZONE', 'lovely cool sand, roped off. it is a trap, and she is watching'],
+  ['\u{1F9AD}', 'SEA LION PILE', 'tiptoe past for points, sprint past and wear it'],
+  ['\u{1F3F0}', 'SANDCASTLE KINGDOM', 'packed damp lanes are a real road; breaking a tower costs you'],
+  ['\u{1FA81}', 'KITE GUY', 'his crashed kite is cool ground until he reels it back in'],
+  ['\u{1F41F}', 'GRUNION RUN', 'every bird leaves for twenty seconds. go.'],
+  ['\u{1F492}', 'BEACH WEDDING', 'cross the seating and the photographer\'s flash blinds you'],
+  ['\u{1F50D}', 'METAL DETECTOR MAN', 'he digs up real loot and leaves it where he stops'],
+  ['\u{1F3D0}', 'LOOSE VOLLEYBALL', 'punt it gently for points, sprint into it and go feet-up'],
+  ['\u{1F30A}', 'LOW TIDE', 'the sea walks out and leaves a cool flat. briefly.'],
+  ['\u{1F426}', 'SEAGULL CIVIL WAR', 'they turn on each other. walk straight through the middle.'],
+  ['\u{1F3A3}', 'FISHERMAN\'S BACKCAST', 'stand near him mid-cast and you get hooked'],
+  ['\u{1F32A}', 'DUST DEVIL', 'it is five years old and carrying someone\'s things'],
+  ['\u{1F3C4}', 'SURF SCHOOL', 'the whistle spikes attention; somebody drops a board you can stand on'],
+  ['\u{2601}', 'CLOUD SHADE', 'a moving patch of cool. chase it.'],
+  ['\u{1F40B}', 'WHALE / DOLPHIN ESCORT', 'a pod paces you offshore and you run faster out of pride'],
+  ['\u{1F31E}', 'SUN FOCUS', 'it is concentrating. on you. move.'],
+  ['\u{1F30A}', 'SNEAKER WAVE', 'the sea reaches much further than it should'],
+];
+const CODEX_PIECES = [
+  ['\u{1F525}', 'THE BOARDWALK', 'a lava lake with seven rickety planks across it'],
+  ['\u{1F3F0}', 'THE SANDCASTLE KINGDOM', 'a scorched block with one winding cool lane through it'],
+  ['\u{1F3A1}', 'THE OLD PIER', 'elevated, safe, and absolutely covered in gulls'],
+  ['\u{1F3D6}', 'THE TOWEL VILLAGE', 'cool towels everywhere, and half of them have a crab in them'],
+  ['\u{1F6A9}', 'THE LIFEGUARD TOWER', 'climb it and the whole beach lays itself out for you'],
+  ['\u{1F3D0}', 'THE VOLLEYBALL COURT', 'flat, packed, cool — and there is a game on'],
+  ['\u{1F6B0}', 'THE STORM DRAIN', 'a cool concrete motorway to the sea. something lives in it.'],
+  ['\u{1FAA8}', 'THE ROCK JETTY', 'cool the whole way, and total bird exposure'],
+  ['\u{1F525}', 'THE BONFIRE PIT', 'last night\'s fire. still going. rings of baked sand.'],
+];
+function codexTab(tab) {
+  if (tab === 'basics') {
+    return `
+      <h4>THE ENTIRE GAME</h4>
+      <p>The sand is lava. Your two feet heat up <b>separately</b>, and when either one passes
+      about 80% you lose health fast. Get to the goal at the far end of the beach before that
+      happens. Then do it again on a hotter beach. Forever.</p>
+      <h4>THE TWO GAUGES THAT MATTER</h4>
+      <p><b>LEFT FOOT / RIGHT FOOT</b> — they cook independently, which is the whole trick.
+      Tapping <b>SPACE</b> hops and <i>swaps your lead foot</i>, so you can rest the bad one on
+      the good one's time. You also can't burn while you're in the air.</p>
+      <p><b>BIRD SUSPICION</b> — climbs while you're loud, fed, exposed or panicking. When it's
+      high the gulls gather overhead, and when the mob is big enough they start diving.</p>
+      <h4>THE GROUND</h4>
+      <p>Most of the beach is survivable. The <b>bright orange puddles</b> are not — they are
+      real, discrete patches you can see and route around, and they get denser every level.
+      Cool things: <i>wet sand near the water, shade, towels, boardwalk, rock, concrete, and
+      the sea itself</i>. Standing in the sea is the full reset, but it's also the birds' pantry.</p>
+      <h4>SOLE TRAIN</h4>
+      <p>Chain fresh refuges without cooking a foot and you build a combo. It is worth real
+      points, and it is the difference between finishing a beach and posting a score.</p>
+      <h4>THINGS THAT ARE NOT OBVIOUS</h4>
+      <p>• <b>Hold Q</b> to scout: the camera lifts and you can read the whole stretch ahead.<br>
+      • Items are <b>permanent for the run</b> and you only get three pockets (four with the
+      shorts). Picking up a fourth pushes your oldest one out onto the sand, where you can
+      still go back for it.<br>
+      • Items <b>combine</b>. Some by name, some just by sharing a tag. Check the pause screen.<br>
+      • The sun climbs while you're out there — dawdling always costs you something.<br>
+      • Some beaches <b>change weather partway through</b>.<br>
+      • If you're in real trouble, somebody might walk out with your shoes. Go to her.</p>`;
+  }
+  if (tab === 'items') {
+    let found = 0;
+    const rows = Object.keys(ITEMS).map((k) => {
+      const d = ITEMS[k];
+      const known = PROFILE.isUnlocked(k);
+      if (known) found++;
+      const unlock = UNLOCKS.find(u => u.item === k);
+      const cls = 'cxrow' + (known ? (d.cursed ? ' cursed' : '') : ' locked');
+      const tags = (d.tags || []).join(' · ');
+      return `<div class="${cls}"><div class="ci">${known ? d.icon : '\u{2753}'}</div><div>
+        <div class="cn">${known ? d.name : '???'}</div>
+        <div class="cd">${known ? d.desc : (unlock ? 'locked — ' + unlock.text : 'you have not found this yet')}</div>
+        ${known && tags ? `<div class="ck">${tags}</div>` : ''}</div></div>`;
+    }).join('');
+    return `<h4>ITEMS — ${found} OF ${Object.keys(ITEMS).length} DISCOVERED</h4>
+      <p>Everything here is permanent for the run. <b>[E]</b> fires your leftmost ready ability.
+      Locked items simply don't spawn yet — the game hands them to you as you earn them, so a
+      first run isn't forty things at once.</p>
+      <div class="cxgrid">${rows}</div>
+      <div class="cxnote">chest-only rewards and instant pickups never need unlocking</div>`;
+  }
+  if (tab === 'birds') {
+    return `<h4>WHO IS WATCHING YOU</h4>
+      <p>Bird suspicion is the second resource. Everything below reacts to it.</p>
+      <div class="cxgrid">${CODEX_BIRDS.map(b =>
+        `<div class="cxrow"><div class="ci">${b[0]}</div><div>
+          <div class="cn">${b[1]}</div><div class="cd">${b[2]}</div></div></div>`).join('')}</div>`;
+  }
+  return `<h4>WHERE YOU ARE GOING</h4>
+    <p>Each beach has one goal at the far end, and it announces itself. A few make you
+    stop and do something when you get there.</p>
+    <div class="cxgrid">${Object.keys(GOALS).map(k => {
+      const g = GOALS[k];
+      const note = g.lowTide ? 'you have to wait for the tide to go out'
+        : g.quiet ? 'approach at a WALK or they scatter'
+        : g.hold ? `takes ${g.hold}s — ${(g.verb || '').toLowerCase()}`
+        : g.asphalt ? 'the blacktop in front of it is the hottest ground on the beach'
+        : 'just reach it';
+      return `<div class="cxrow"><div class="ci">${g.icon}</div><div>
+        <div class="cn">${g.name}</div><div class="cd">${note}</div></div></div>`;
+    }).join('')}</div>
+    <h4>SET PIECES</h4>
+    <p>Two or three of these are stitched into every beach, and they force their own
+    ground — you can't stroll around them.</p>
+    <div class="cxgrid">${CODEX_PIECES.map(b =>
+      `<div class="cxrow"><div class="ci">${b[0]}</div><div>
+        <div class="cn">${b[1]}</div><div class="cd">${b[2]}</div></div></div>`).join('')}</div>
+    <h4>THINGS THAT JUST HAPPEN</h4>
+    <div class="cxgrid">${CODEX_EVENTS.map(b =>
+      `<div class="cxrow"><div class="ci">${b[0]}</div><div>
+        <div class="cn">${b[1]}</div><div class="cd">${b[2]}</div></div></div>`).join('')}</div>
+    <h4>THE WEATHER</h4>
+    <div class="cxgrid">${Object.keys(WEATHER).map(k => {
+      const w = WEATHER[k];
+      const bits = [];
+      bits.push(w.heat > 1.05 ? 'burns faster' : w.heat < 0.95 ? 'burns slower' : 'normal heat');
+      if (w.aggro > 1.1) bits.push('birds bolder');
+      if (w.aggro < 0.9) bits.push('birds calmer');
+      if (w.gust) bits.push('shoves you sideways');
+      if (w.coolMul) bits.push('nothing cools properly');
+      if (w.wash > 2) bits.push('the sea is way out');
+      return `<div class="cxrow"><div class="ci">\u{1F324}</div><div>
+        <div class="cn">${w.name}</div><div class="cd">${bits.join(' · ')}</div></div></div>`;
+    }).join('')}</div>`;
+}
+let cxTab = 'basics';
+function renderCodex() { D.cxBody.innerHTML = codexTab(cxTab); D.cxBody.scrollTop = 0; }
+$('btnCodex').addEventListener('click', () => {
+  AU.ensure(); AU.resume();
+  D.title.classList.add('hidden'); D.codex.classList.remove('hidden');
+  cxTab = 'basics';
+  document.querySelectorAll('.cxtab').forEach(t => t.classList.toggle('on', t.dataset.tab === 'basics'));
+  renderCodex();
+});
+$('btnCodexBack').addEventListener('click', () => {
+  D.codex.classList.add('hidden'); D.title.classList.remove('hidden');
+});
+document.querySelectorAll('.cxtab').forEach(t => t.addEventListener('click', () => {
+  cxTab = t.dataset.tab;
+  document.querySelectorAll('.cxtab').forEach(o => o.classList.toggle('on', o === t));
+  renderCodex(); AU.tick();
+}));
 
 // ---------------- level complete ----------------
 const FLAVOR = [
@@ -432,7 +711,7 @@ function levelComplete() {
   if (S.goal.key === 'nursery') { sc += 1200; lines.push(['⭐ SEAL APPROVAL', '+1200']); }
   const tb = Math.max(0, Math.round((260 - S.levelTime) * 14));
   if (tb) { sc += tb; lines.push(['SPEED BONUS', '+' + tb]); }
-  if (S.slots.length === 3) { sc += 300; lines.push(['FULL POUCH', '+300']); }
+  if (S.slots.length >= S.maxSlots) { sc += 300; lines.push(['FULL POUCH', '+300']); }
   if (hasItem('duck')) { sc += 600; lines.push(['DUCK LOYALIST', '+600']); }
   if (S.heatState >= 3) { sc += 500; lines.push(['PHOTO FINISH', '+500']); }
   if (S.stats.cleanLevel) { sc += 900; lines.push(['COOL CUSTOMER', '+900']); }
@@ -441,10 +720,14 @@ function levelComplete() {
     const cb = S.stats.bestCombo * 150;
     sc += cb; lines.push(['BEST SOLE TRAIN ×' + S.stats.bestCombo, '+' + cb]);
   }
-  const mult = S.diff.mult * (1 + 0.1 * (S.level - 1));
+  const mult = S.diff.mult * (1 + 0.1 * (S.level - 1)) * S.mutMult;
   sc = Math.round(sc * mult);
   S.score += sc;
   lines.push(['LEVEL ' + S.level + ' × ' + S.diff.label, '×' + mult.toFixed(1)]);
+  if (S.mutMult > 1) {
+    const on = Object.keys(S.mut).map(id => MUTATORS.find(m => m.id === id).name).join(' · ');
+    lines.push(['⚠ ' + on, '×' + S.mutMult.toFixed(2)]);
+  }
 
   D.ilTitle.textContent = S.goal.def.icon + ' ' + S.goal.def.name;
   D.ilLines.innerHTML = lines.map(l => `<div class="row"><span>${l[0]}</span><span>${l[1]}</span></div>`).join('')
@@ -481,6 +764,44 @@ function doneness(v) {
   if (v < 95) return 'CHARCOAL';
   return 'TECHNICALLY BRISKET';
 }
+/**
+ * Every run gets a name, taken from whatever it was actually ABOUT. Each
+ * candidate scores itself against the run's stats and the loudest one wins,
+ * so "THE SANDAL INCIDENT" only shows up on a run that really was one.
+ */
+function nameTheRun(s) {
+  const lvl = Math.max(1, S.level);
+  // score everything PER BEACH, so a name describes what the run was like
+  // rather than just how long it went on
+  const per = (n) => n / lvl;
+  const cand = [
+    ['THE SANDAL INCIDENT',        per(s.faceplants * 2 + s.trips)],
+    ['DEATH BY PELICAN',           per(s.hits) * 1.6],
+    ['A SERIES OF ROBBERIES',      per(s.thefts) * 4],
+    ['THE LONG WALK BACK',         per(s.recovered) * 4],
+    ['THE GREAT BIRD WAR',         per(s.punts * 3 + s.raids)],
+    ['THE BEACHCOMBER',            per(s.items) * 0.28],
+    ['NOTHING BUT LAVA',           per(s.hotSteps) * 0.03],
+    ['A CAREER IN PODIATRY',       lvl >= 8 ? 3 + lvl * 0.5 : 0],
+    ['THE PLOVER AFFAIR',          per(s.conned) * 5],
+    ['SHE CAME BACK FOR YOU',      s.rescues * 9],
+    ['THE TREASURE HUNT',          per(s.chests) * 5 + s.islands * 8],
+    ['CRAB-ADJACENT',              per(s.crabs) * 3],
+    ['THE SOLE TRAIN',             s.bestCombo >= 8 ? s.bestCombo * 0.7 : 0],
+    ['LISTENING TO A PELICAN',     per(s.prophecies) * 4],
+    ['ABDUCTED, BRIEFLY',          s.eagles * 10],
+    ['THE SWIM',                   per(s.waterTime) * 0.3],
+    ['MOSTLY RUNNING AWAY',        per(s.leaps) * 0.8],
+    // these two describe the SHAPE of a run, so they only apply once one
+    // has actually happened — otherwise a fresh stat block wins by default
+    ['A QUIET DAY, MOSTLY',        s.pacifist && s.hits === 0 && lvl >= 3 ? 4 + lvl * 0.4 : 0],
+    ['THE TOURIST',                lvl <= 1 ? 5 : 0],
+  ];
+  cand.sort((a, b) => b[1] - a[1]);
+  // if nothing about the run stood out, it was just a day at the beach
+  return cand[0][1] < 3 ? 'AN ORDINARY AFTERNOON' : cand[0][0];
+}
+
 /** The feet give out: collapse, smoke, a beat of silence, then the card. */
 function beginDeath() {
   if (S.mode === 'dying') return;
@@ -538,6 +859,8 @@ function die() {
     'The gulls will sing of this day.',
     'He was warned. He was given a rubber duck. He persisted.',
   ][Math.floor(Math.random() * 4)];
+  S.runName = nameTheRun(s);
+  D.runName.textContent = '“' + S.runName + '”';
   const rows = [
     ['Beaches cleared', S.level - 1],
     ['Fell on level', S.level],
@@ -566,11 +889,16 @@ function die() {
     ? S.slots.map(s => s.def.icon + ' ' + s.def.name).join('  ·  ')
     : 'nothing but your own two feet';
   const syn = activeSynergies().map(s => '★ ' + s.name).join('  ');
+  const mutLine = Object.keys(S.mut).map(id => {
+    const m = MUTATORS.find(x => x.id === id); return m ? m.icon + ' ' + m.name : id;
+  }).join('  ·  ');
   D.card.innerHTML = rows.map(r => `<div class="row"><span>${r[0]}</span><span>${r[1]}</span></div>`).join('')
     + `<div class="row bonus"><span>DISTANCE CONSOLATION</span><span>+${consolation}</span></div>`
     + `<div class="row" style="margin-top:6px;border-top:2px solid var(--line);padding-top:6px">
          <span>FINAL BUILD</span><span style="max-width:16em;text-align:right">${buildLine}</span></div>`
     + (syn ? `<div class="row bonus"><span>SYNERGIES</span><span>${syn}</span></div>` : '')
+    + (mutLine ? `<div class="row bonus"><span>MADE IT WORSE (×${S.mutMult.toFixed(2)})</span>`
+        + `<span style="max-width:16em;text-align:right">${mutLine}</span></div>` : '')
     + (fresh.length
       ? '<div class="row" style="margin-top:6px;border-top:2px solid var(--line);padding-top:6px">'
         + '<span>NEWLY UNLOCKED</span><span></span></div>'
@@ -687,6 +1015,37 @@ function renderCareer() {
     `<div class="disc">${got} / ${total} BEACH ITEMS DISCOVERED</div>` +
     `<div class="bar"><i style="width:${Math.round(got / total * 100)}%"></i></div>` +
     (next ? '<div class="next">' + next + '</div>' : '<div class="disc">everything found. astonishing.</div>');
+  renderMutators();
+}
+
+/**
+ * MAKE IT WORSE — earned rule changes you switch on before a run. The panel
+ * stays hidden until you've earned your first one, so a new player never
+ * sees it. Each pays a score multiplier, and they stack.
+ */
+function renderMutators() {
+  if (!D.mutbox) return;
+  const earned = MUTATORS.filter(m => PROFILE.mutatorEarned(m));
+  if (!earned.length) { D.mutbox.classList.add('hidden'); return; }
+  D.mutbox.classList.remove('hidden');
+  D.mutrow.innerHTML = MUTATORS.map((m) => {
+    const has = PROFILE.mutatorEarned(m);
+    const on = has && PROFILE.mutatorOn(m.id);
+    const have = PROFILE.data.stats[m.need[0]] || 0;
+    const cls = 'mut' + (on ? ' on' : '') + (has ? '' : ' locked');
+    const sub = has ? m.blurb : `locked — ${m.need[0]} ${Math.min(have, m.need[1])}/${m.need[1]}`;
+    return `<button class="${cls}" data-mut="${m.id}" ${has ? '' : 'disabled'}>
+      <b>${m.icon} ${has ? m.name : '???'}</b><i>${sub}</i>
+      <span class="mm">+${Math.round(m.mult * 100)}% score</span></button>`;
+  }).join('');
+  const mult = PROFILE.mutatorMult();
+  D.mutMult.textContent = mult > 1 ? `×${mult.toFixed(2)} SCORE` : 'nothing switched on';
+  D.mutrow.querySelectorAll('.mut[data-mut]').forEach(b => b.addEventListener('click', () => {
+    if (b.disabled) return;
+    PROFILE.toggleMutator(b.dataset.mut);
+    AU.ensure(); AU.tick();
+    renderMutators();
+  }));
 }
 
 function renderScores() {
@@ -777,8 +1136,19 @@ const TUTORIAL = [
 function simulate(dt) {
   S.levelTime += dt; S.runTime += dt;
 
+  // the sky is allowed to change its mind partway down the beach
+  tickWeatherTurn(dt);
+  if (S.wxAnnounce) {
+    const [ttl, blurb] = S.wxAnnounce; S.wxAnnounce = null;
+    banner(ttl, blurb);
+    teach('weather');
+    AU.sweep(300, 620, 1.4, 'sine', 0.045);
+    MUSIC.setMood(S.wxTo ? S.wxTo.key : S.weather.key);   // rescore for the new sky
+    say(blurb, true);
+  }
+
   const scouting = input.scout && runner.grounded;
-  if (scouting && S.mode === 'play') { S.mode = 'scout'; S.stats.scouts++; AU.scout(); }
+  if (scouting && S.mode === 'play') { S.mode = 'scout'; S.stats.scouts++; AU.scout(); teach('scout'); }
   else if (!scouting && S.mode === 'scout') S.mode = 'play';
 
   const st = runner.update(dt, input, cam.yaw);
@@ -801,7 +1171,10 @@ function simulate(dt) {
 
   // ---------- heat ----------
   const build = buildStats();
-  S.maxSlots = 3 + build.slots;              // shorts grant a fourth pocket
+  // shorts grant a fourth pocket — unless ONE POCKET says otherwise
+  S.maxSlots = S.mut.onepocket ? 1 : 3 + build.slots;
+  while (S.slots.length > S.maxSlots) S.slots.shift();
+  if (runner.refuge) teach('refuge');
   // the soggy paperback pays you to actually sit still on a refuge
   if (hasIt('paperback') && runner.refuge && runner.speed < 0.8) {
     S.readT = (S.readT || 0) + dt;
@@ -809,6 +1182,21 @@ function simulate(dt) {
   }
   // doubloons: heavy, but the score just keeps coming
   if (build.gold) { S.goldT = (S.goldT || 0) + dt; if (S.goldT > 0.5) { S.goldT = 0; addScore(70); } }
+  // climb the lifeguard tower and the whole beach lays itself out for you —
+  // the reward for going up is that you never have to guess again
+  if (runner.refuge && runner.refuge.tower && !runner.refuge.claimed) {
+    runner.refuge.claimed = true;
+    let n = 0;
+    for (const it of S.items) {
+      if (it.taken) continue;
+      it.mesh.children[1].scale.setScalar(2.4); n++;
+    }
+    for (const ch of S.chests) if (!ch.opened) ch.mesh.children[4].scale.setScalar(3.2);
+    buildCoolRoute(true);
+    banner('THE WHOLE BEACH', 'you can see everything from up here');
+    toast('\u{1F6A9} ' + n + ' things worth having, and the cool way through  +400');
+    addScore(400); AU.scout(); say('oh, THAT is where everything is.', true);
+  }
   // the keys belong to a car, and the car is in the parking lot
   if (build.keys && !S.keysUsed && S.goal.key !== 'parking') {
     S.keysUsed = true;
@@ -901,7 +1289,7 @@ function simulate(dt) {
   // a slow baseline so the flock is always quietly assembling somewhere behind
   // you — the beach is never empty of birds for long
   let ag = 3.2;
-  if (inWater) { ag = 24; S.stats.waterTime += dt; }
+  if (inWater) { ag = 24; S.stats.waterTime += dt; teach('water'); }
   else if (runner.z < waveZ + 3) ag = 14;
   if (S.heatState >= 4) ag += 15;                     // you smell like lunch
   else if (S.heatState === 3) ag += 6;
@@ -1315,7 +1703,8 @@ window.DBYF = {
   S, runner, camera, cam, keys, input, renderer, scene, AU, MUSIC, PROFILE,
   ITEMS, SYNERGIES, buildStats, activeSynergies, grant, readyActive, flock,
   spawnThief, spawnVulture, spawnFalcon, spawnEagle, scatterAt, useItem, dropItem,
-  spawnTerns, spawnPelicanLine, fireEvent, buildChestAt,
+  spawnTerns, spawnPelicanLine, fireEvent, buildChestAt, transitionWeather,
+  rollItem, sunPressure, MUTATORS, setPaused,
   levelComplete, die, nextLevel, generateLevel: () => generateLevel(runner),
   /** headless tick. `visual` does the expensive repaint; skip it for balance sims. */
   step(dt = 0.016, visual = true) {

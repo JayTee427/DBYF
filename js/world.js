@@ -413,16 +413,119 @@ export function pickWeather(rng) {
   for (const [k, w] of WEATHER_POOL) { roll -= w; if (roll <= 0) return WEATHER[k]; }
   return WEATHER.clear;
 }
-export function applyWeather(wx) {
-  S.weather = wx;
+function sunIntensity(wx) { return wx.key === 'marine' || wx.key === 'drizzle' ? 0.5 : 1.2; }
+/** Push one weather's look at the scene, all at once. */
+function paintWeather(wx) {
   skyMat.uniforms.top.value.setHex(wx.sky[0]);
   skyMat.uniforms.bot.value.setHex(wx.sky[1]);
   scene.fog.color.setHex(wx.fogC);
   scene.fog.near = wx.fog[0]; scene.fog.far = wx.fog[1];
   hemi.intensity = wx.amb;
   sunLight.color.setHex(wx.light);
-  sunLight.intensity = wx.key === 'marine' || wx.key === 'drizzle' ? 0.5 : 1.2;
+  sunLight.intensity = sunIntensity(wx);
   setSunMood(S.diffKey === 'august' && wx.sun !== 'hidden' ? 'rage' : wx.sun);
+  applyPeaSoup();
+}
+/** PEA SOUP: whatever the sky is doing, you can't see any of it. */
+function applyPeaSoup() {
+  if (!S.mut.blind) return;
+  scene.fog.near = Math.min(scene.fog.near, 8);
+  scene.fog.far = Math.min(scene.fog.far, 46);
+}
+/**
+ * S.weather is a *live, mutable* blend, not one of the WEATHER constants —
+ * so a beach can change its mind halfway through and everything that reads
+ * `.heat` / `.aggro` / `.wash` follows it without knowing a transition exists.
+ */
+export function applyWeather(wx) {
+  S.weather = Object.assign({}, wx);
+  S.wxFrom = null; S.wxTo = null; S.wxT = 0;
+  paintWeather(wx);
+}
+
+// ---------------- weather that changes its mind ----------------
+// The marine layer burns off. The drizzle passes. The fog rolls in. Each
+// takes long enough that you feel the beach turning against (or for) you.
+const TRANSITIONS = {
+  marine:  [['clear', 'THE MARINE LAYER BURNS OFF', 'the grey lifts, and the sand remembers what it is for'],
+            ['noon',  'THE MARINE LAYER BURNS OFF', 'oh no. oh no, it is going to be one of THOSE days']],
+  drizzle: [['clear', 'THE RAIN PASSES', 'and just like that, it is over']],
+  clear:   [['marine', 'THE FOG ROLLS IN', 'you can hear the sea but you cannot see it'],
+            ['noon',   'THE SUN CLIMBS', 'it has found you']],
+  golden:  [['marine', 'THE FOG ROLLS IN', 'the light goes, and so does your visibility']],
+  wind:    [['clear', 'THE WIND DROPS', 'the beach goes very, very quiet']],
+  humid:   [['drizzle', 'IT FINALLY BREAKS', 'rain. actual rain. thank you.']],
+  lowtide: [['humid', 'THE AIR GOES THICK', 'nothing is cooling down any more']],
+};
+
+/** Roll whether this beach turns, and schedule it for the middle of the run. */
+export function scheduleWeatherTurn(rng) {
+  S.wxTurnAt = 0; S.wxTurn = null;
+  if (S.level < 2 || S.killScreen || S.isIsland) return;
+  const opts = TRANSITIONS[S.weather.key];
+  if (!opts || rng() > 0.42) return;
+  S.wxTurn = opts[Math.floor(rng() * opts.length)];
+  S.wxTurnAt = 38 + rng() * 46;             // deep enough in that you've settled
+}
+
+/** Begin a blend. `secs` is how long the sky takes to change its mind. */
+export function transitionWeather(toKey, secs = 11) {
+  const to = WEATHER[toKey];
+  if (!to || !S.weather) return;
+  S.wxFrom = {
+    sky: [skyMat.uniforms.top.value.clone(), skyMat.uniforms.bot.value.clone()],
+    fogC: scene.fog.color.clone(),
+    fogNear: scene.fog.near, fogFar: scene.fog.far,
+    amb: hemi.intensity, light: sunLight.color.clone(), sunI: sunLight.intensity,
+    heat: S.weather.heat, aggro: S.weather.aggro, wash: S.weather.wash,
+    coolMul: S.weather.coolMul || 1, gust: S.weather.gust || 0,
+  };
+  S.wxTo = to; S.wxT = 0; S.wxDur = secs; S.wxFlipped = false;
+}
+
+const _cA = new THREE.Color(), _cB = new THREE.Color();
+/** Advance a running blend. Called every frame from the sim. */
+export function tickWeatherTurn(dt) {
+  // has this beach's scheduled turn come due?
+  if (S.wxTurn && S.levelTime >= S.wxTurnAt && !S.wxTo) {
+    const [key, title, blurb] = S.wxTurn;
+    S.wxTurn = null;
+    transitionWeather(key);
+    S.wxAnnounce = [title, blurb];
+  }
+  if (!S.wxTo) return;
+  S.wxT = Math.min(1, S.wxT + dt / S.wxDur);
+  const f = S.wxFrom, to = S.wxTo;
+  const k = S.wxT * S.wxT * (3 - 2 * S.wxT);       // ease, so it never snaps
+
+  skyMat.uniforms.top.value.copy(f.sky[0]).lerp(_cA.setHex(to.sky[0]), k);
+  skyMat.uniforms.bot.value.copy(f.sky[1]).lerp(_cB.setHex(to.sky[1]), k);
+  scene.fog.color.copy(f.fogC).lerp(_cA.setHex(to.fogC), k);
+  scene.fog.near = lerp(f.fogNear, to.fog[0], k);
+  scene.fog.far = lerp(f.fogFar, to.fog[1], k);
+  hemi.intensity = lerp(f.amb, to.amb, k);
+  sunLight.color.copy(f.light).lerp(_cA.setHex(to.light), k);
+  sunLight.intensity = lerp(f.sunI, sunIntensity(to), k);
+  applyPeaSoup();
+
+  // the numbers the simulation actually reads, moving with the sky
+  const w = S.weather;
+  w.heat = lerp(f.heat, to.heat, k);
+  w.aggro = lerp(f.aggro, to.aggro, k);
+  w.wash = lerp(f.wash, to.wash, k);
+  w.coolMul = lerp(f.coolMul, to.coolMul || 1, k);
+  w.gust = lerp(f.gust, to.gust || 0, k);
+
+  // halfway through it stops being the old weather and starts being the new
+  if (!S.wxFlipped && S.wxT >= 0.5) {
+    S.wxFlipped = true;
+    w.key = to.key; w.name = to.name; w.sun = to.sun;
+    setSunMood(S.diffKey === 'august' && to.sun !== 'hidden' ? 'rage' : to.sun);
+  }
+  if (S.wxT >= 1) {
+    S.weather = Object.assign({}, to);
+    S.wxFrom = null; S.wxTo = null;
+  }
 }
 export function buildScenery(rng) {
   while (sceneryGroup.children.length) sceneryGroup.remove(sceneryGroup.children[0]);

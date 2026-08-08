@@ -9,5 +9,7 @@ export const bus = {
   shake: () => { },
   instant: () => { },
   flash: () => { },
+  /** Explain something exactly once, ever. No-ops after the first time. */
+  teach: () => { },
 };
 export function wireBus(handlers) { Object.assign(bus, handlers); }
