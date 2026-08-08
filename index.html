@@ -95,6 +95,30 @@
   .slot .tm{font-family:Consolas,monospace;font-size:9px;color:var(--cool)}
   .slot.empty{opacity:.32}
   .slot .e{font-family:Consolas,monospace;font-size:10px;color:#a89070}
+  .slot.r2{border-color:var(--gold);box-shadow:0 0 12px rgba(255,217,74,.45)}
+  .slot.r3{border-color:#c86bff;box-shadow:0 0 14px rgba(200,107,255,.55)}
+  .slot.r3 .nm{color:#e3bcff}
+
+  /* build & ability HUD */
+  #ability{position:absolute;bottom:104px;right:20px;font-family:Consolas,monospace;font-size:14px;
+    background:var(--panel);border:2px solid var(--cool);border-radius:4px;padding:6px 14px;color:var(--cream)}
+  #ability.cooling{border-color:#7a6a55;opacity:.6}
+  #ability b{color:var(--gold);margin-right:5px}
+  #ability i{color:#ffa07a;font-style:normal}
+  #syn{position:absolute;bottom:140px;right:20px;display:flex;flex-direction:column;gap:4px;align-items:flex-end}
+  #syn span{font-family:Consolas,monospace;font-size:12px;color:#ffd94a;background:var(--panel);
+    border:2px solid var(--gold);border-radius:3px;padding:3px 10px;
+    text-shadow:0 0 10px rgba(255,217,74,.6)}
+  #swapHint{position:absolute;bottom:112px;left:50%;transform:translateX(-50%);text-align:center;
+    font-family:Consolas,monospace;font-size:13px;line-height:1.6;color:var(--cream);
+    background:var(--panel);border:2px solid var(--gold);border-radius:4px;padding:7px 16px}
+  #swapHint b{color:var(--gold)}
+  #banner{position:absolute;top:34%;left:50%;transform:translateX(-50%);text-align:center;
+    display:flex;flex-direction:column;gap:3px;animation:bpop .5s ease-out}
+  #banner b{font-family:Consolas,monospace;font-size:30px;letter-spacing:.14em;color:#ffd94a;
+    text-shadow:0 0 22px rgba(255,180,0,.9),3px 3px 0 #5c3200}
+  #banner span{font-size:13px;font-style:italic;color:#ffe9bf}
+  @keyframes bpop{0%{opacity:0;transform:translateX(-50%) scale(.6)}55%{transform:translateX(-50%) scale(1.12)}100%{opacity:1;transform:translateX(-50%) scale(1)}}
 
   #heatstate{position:absolute;bottom:108px;left:50%;transform:translateX(-50%);
     font-family:Consolas,monospace;font-weight:bold;font-size:23px;letter-spacing:.2em;
@@ -191,7 +215,7 @@
   <div id="keys">
     <span><b>WASD</b> run</span><span><b>MOUSE</b> look</span><span><b>SHIFT</b> sprint</span>
     <span><b>SPACE</b> hop / swap foot</span><span><b>SHIFT+SPACE</b> leap</span>
-    <span><b>Q</b> scout</span><span><b>E</b> use item</span>
+    <span><b>Q</b> scout</span><span><b>E</b> ability</span><span><b>F</b> swap item</span>
   </div>
   <div id="volrow">
     <button id="muteBtn" title="mute (M)">🔊</button>
@@ -238,6 +262,10 @@
   </div>
 
   <div id="combo" class="hidden">SOLE TRAIN ×2</div>
+  <div id="syn" class="hidden"></div>
+  <div id="ability" class="hidden"></div>
+  <div id="swapHint" class="hidden"></div>
+  <div id="banner" class="hidden"></div>
   <div id="heatstate" class="s0">COMFY</div>
   <div id="toasts"></div>
 </div>
@@ -277,6 +305,6 @@
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js" } }
 </script>
-<script type="module" src="js/main.js?v=1.2.0"></script>
+<script type="module" src="js/main.js?v=2.0.0"></script>
 </body>
 </html>

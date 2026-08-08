@@ -26,7 +26,8 @@ Then open http://localhost:8123 in a browser. Three.js loads from CDN at runtime
 | Space | hop — no burning mid-air, and it **swaps your lead foot** |
 | Shift + Space | **LEAP** — ~11m, clears a whole scorch band |
 | **Q** or right-mouse | **SCOUT** — rise up and read the beach |
-| E | use item (oar vault, boogie board) |
+| E | use your active item's ability |
+| F | swap a new item into a full build |
 | Mouse wheel | zoom |
 | M | mute · `[` `]` volume (also a slider on the title screen) |
 
@@ -44,7 +45,22 @@ Then open http://localhost:8123 in a browser. Three.js loads from CDN at runtime
 - **Wet sand is cool sand** for a few seconds after a wave. The water cools fastest of all — but the **BIRD SUSPICION** meter fills while you're down there, and gulls answer it. By level 6 a peregrine falcon starts locking onto you (shelter behind a rock).
 - **Six rotating goals**, each with its own audio beacon: ice cream truck, your flip-flops, the beach shower, an umbrella camp, the tide pools, and rarely the golden **seal nursery** with bouncing pups.
 - **Weather characters** change each beach: High Noon, Marine Layer, Golden Hour, Low Tide, Drizzle. Mid-level the beach interrupts you with drifting cloud shade to chase, whale-breach wave surges, sneaker waves, and the Sun personally focusing a burn-ring on you.
-- **Items auto-equip into 3 FIFO slots.** Sandals, sunscreen, kelp wraps, spinach (punt a gull), pizza (birds adore you), a message in a bottle that reveals the cool route, a pirate's hat, and a rubber duck that does absolutely nothing and is beloved.
+## The build
+
+Items are **permanent for the whole run**. They stack, they combine, and losing one hurts.
+
+- **20 items across three rarities.** Some are passive (sandals, kelp wrap, pirate boots), eight have an **active ability on [E]** — pole-vault with the oar, douse your feet from the bucket, throw the special rock and appear where it lands, stop time with the old timepiece, or open a can of spinach and punch every bird in reach.
+- **Three slots, FIFO.** With a free slot you pick things up automatically; with a full build you must press **F** to swap, so the choice is yours.
+- **Synergies** fire when a build comes together — THE CAPTAIN (pirate hat + boots: the gulls salute), FULLY INSULATED, SEA LEGS, SCRAPPER, BEACHCOMBER, THE BOUNCER.
+- **Cursed items are real gambles.** The corn dog makes you fast and delicious. The cursed sand dollar showers you in loot and makes the Sun hate you personally. The old tuna can summons the bald eagle, who may hand you a treasure or carry you off.
+
+## The birds
+
+They **live on the beach**. As you get more interesting — paddling in the wash, catching fire, carrying food, dawdling in the open — gulls land nearby one at a time and **edge closer, hop by hop**. You can watch the threat assemble. Sprint through them to scatter them.
+
+When enough have gathered, **the whole flock takes off at once** and dives, each strike telegraphed by a shadow on the sand. If one gets you it **steals an item off your build and flies away with it — chase it down and tackle it to get it back.**
+
+Also working this beach: a **Heermann's gull** that shadows you at a distance and robs your *best* item the moment you're mid-air or burning; a **snowy plover** running the broken-wing act to lure you into the lava; a **turkey vulture** that circles patiently while you're on fire; a **peregrine falcon** that locks a red reticle onto you before its stoop (get behind a rock); and rarely **the bald eagle**, at whose arrival every other bird instantly leaves.
 - Endless escalating levels, four difficulties from **Tourist** to **BAREFOOT IN AUGUST**, and arcade high scores: three initials, the **HALL OF SOLES**, and a podiatrist's report card ("Left foot: TECHNICALLY BRISKET").
 
 ## Roadmap

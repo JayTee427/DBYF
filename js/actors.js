@@ -9,6 +9,8 @@ import {
 import { S, W, HEAT, STAM, DIFFS, effHeat, effAggro, hasItem, footState } from './state.js';
 import { scene, groundY, heatAt, wetness, waveZ, waveEdgeAt, shadeAt, pickWeather, applyWeather, buildScenery, resetTide, rebuildTerrain, WEATHER } from './world.js';
 import { AU, say, OW } from './audio.js';
+import { ITEMS, rollItem, buildStats } from './items.js';
+import { clearFlock, spawnPlover, buildSanderlings } from './birds.js';
 
 export const particles = new Particles(scene, 260);
 export const prints = new Footprints(scene, 64);
@@ -16,31 +18,6 @@ export const levelGroup = new THREE.Group();
 scene.add(levelGroup);
 
 // ============================================================
-// ITEMS
-// ============================================================
-export const ITEMS = {
-  sandals:   { icon: '\u{1FA74}', name: 'SANDALS',    tier: 1, w: 13, dur: 26, blurb: 'heat resist — until they fly off' },
-  sunscreen: { icon: '\u{1F9F4}', name: 'SUNSCREEN',  tier: 1, w: 12, dur: 24, blurb: 'slows the burn' },
-  kelp:      { icon: '\u{1F33F}', name: 'KELP WRAP',  tier: 1, w: 12, shield: 55, blurb: 'soggy foot armour' },
-  popsicle:  { icon: '\u{1F9CA}', name: 'POPSICLE',   tier: 1, w: 11, dur: 9,  blurb: 'rapid cooling, melting fast' },
-  cap:       { icon: '\u{1F9E2}', name: 'LOST CAP',   tier: 1, w: 10, dur: 30, blurb: 'a little shade' },
-  duck:      { icon: '\u{1F986}', name: 'RUBBER DUCK',tier: 1, w: 9,  dur: Infinity, blurb: 'does nothing. beloved.' },
-  boogie:    { icon: '\u{1F3C4}', name: 'BOOGIE BOARD',tier: 1, w: 9, uses: 2, blurb: 'E — drop & surf a dune' },
-  oar:       { icon: '\u{1F6F6}', name: 'OAR',        tier: 2, w: 9,  uses: 3, blurb: 'E — pole vault' },
-  spinach:   { icon: '\u{1F96C}', name: 'SPINACH',    tier: 2, w: 8,  dur: 12, blurb: 'punt the birds' },
-  pizza:     { icon: '\u{1F355}', name: 'PIZZA SLICE',tier: 2, w: 8,  dur: 16, blurb: '+HP. birds adore you.' },
-  bottle:    { icon: '\u{1F4EC}', name: 'MSG IN BOTTLE', tier: 2, w: 7, dur: Infinity, blurb: 'reveals the cool route' },
-  hat:       { icon: '\u{1F3F4}', name: "PIRATE'S HAT", tier: 2, w: 6, dur: 34, blurb: 'gulls may salute' },
-  timepiece: { icon: '\u{23F1}',  name: 'OLD TIMEPIECE', tier: 2, w: 5, dur: 8, blurb: 'stops the sun. and the waves.' },
-};
-function rollItem(rng, tier) {
-  const keys = Object.keys(ITEMS).filter(k => tier === 2 ? true : ITEMS[k].tier === 1);
-  let tot = 0; for (const k of keys) tot += ITEMS[k].w * (ITEMS[k].tier === 2 && tier === 2 ? 2 : 1);
-  let r = rng() * tot;
-  for (const k of keys) { r -= ITEMS[k].w * (ITEMS[k].tier === 2 && tier === 2 ? 2 : 1); if (r <= 0) return k; }
-  return 'sandals';
-}
-
 // ============================================================
 // GOALS
 // ============================================================
@@ -517,191 +494,6 @@ function buildGoal(key, x, z) {
 }
 
 // ============================================================
-// BIRDS
-// ============================================================
-function gullMesh(scale = 1) {
-  const g = new THREE.Group();
-  const body = meshOf(new THREE.CapsuleGeometry(0.22, 0.5, 4, 8), 0xf7f7f2);
-  body.rotation.x = Math.PI / 2; g.add(body);
-  const head = meshOf(new THREE.SphereGeometry(0.2, 8, 8), 0xffffff); head.position.z = 0.44; g.add(head);
-  const beak = meshOf(new THREE.ConeGeometry(0.08, 0.32, 5), 0xffa33d, { outlineScale: 1.2 });
-  beak.rotation.x = Math.PI / 2; beak.position.z = 0.72; g.add(beak);
-  const wm = toon(0xe9e9e4); wm.side = THREE.DoubleSide;
-  const w1 = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 0.42), wm); w1.position.x = -0.7; g.add(w1);
-  const w2 = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 0.42), wm); w2.position.x = 0.7; g.add(w2);
-  g.userData.wings = [w1, w2];
-  g.scale.setScalar(scale);
-  return g;
-}
-
-/** A telegraphed strike: the shadow shows exactly where it will land, so
- *  getting hit is always a read you lost, never a dice roll. */
-function strikeShadow(x, z) {
-  const m = new THREE.Mesh(new THREE.CircleGeometry(2.6, 22),
-    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }));
-  m.rotation.x = -Math.PI / 2;
-  m.position.set(x, groundY(x, z) + 0.06, z);
-  m.renderOrder = 6;
-  scene.add(m);
-  return m;
-}
-export function spawnGullRaid(runner) {
-  const n = S.level >= 5 ? 3 : S.level >= 3 ? 2 : 1;
-  for (let i = 0; i < n; i++) {
-    const m = gullMesh(1); scene.add(m);
-    // aim ahead of where the runner is going — you must break your line to dodge
-    const lead = 1.1 + i * 0.5;
-    const tx = runner.x + Math.sin(runner.facing) * runner.speed * lead * 0.35 + (i - 1) * 2.2;
-    const tz = runner.z + Math.cos(runner.facing) * runner.speed * lead * 0.35;
-    S.birds.push({
-      kind: 'gull', mesh: m, t: -i * 0.5, dur: 2.6, resolved: false,
-      shadow: strikeShadow(tx, tz),
-      from: new THREE.Vector3(runner.x - 18 - i * 5, 13 + i * 2, runner.z - 24),
-      to: new THREE.Vector3(tx, groundY(tx, tz) + 0.9, tz),
-      exit: new THREE.Vector3(runner.x + 28, 16, runner.z - 28),
-    });
-  }
-  AU.screech(); AU.gullCall();
-  toast('\u{1F426} INCOMING — MOVE!', 'bad');
-}
-
-export function spawnFalcon(runner) {
-  const m = gullMesh(1.25);
-  m.children.forEach(c => { if (c.material && c.material.color) c.material.color.multiplyScalar(0.55); });
-  scene.add(m);
-  const ring = new THREE.Mesh(new THREE.RingGeometry(1.2, 1.6, 20),
-    new THREE.MeshBasicMaterial({ color: 0xff2200, transparent: true, opacity: 0.9, side: THREE.DoubleSide }));
-  ring.rotation.x = -Math.PI / 2; scene.add(ring);
-  S.birds.push({ kind: 'falcon', mesh: m, ring, t: 0, phase: 'lock', lockT: 0, resolved: false });
-  AU.sweep(1800, 2600, 0.5, 'sawtooth', 0.1);
-  toast('\u{1F985} PEREGRINE FALCON — TAKE COVER', 'bad');
-  say('oh no. oh no no no.', true);
-}
-
-export function updateBirds(dt, runner) {
-  for (const b of [...S.birds]) {
-    if (b.kind === 'gull') {
-      b.t += dt / b.dur;
-      if (b.t < 0) continue;
-      if (b.shadow) {   // tightens and darkens as the strike closes in
-        const k = clamp(b.t / 0.46, 0, 1);
-        b.shadow.scale.setScalar(lerp(1.5, 0.85, k));
-        b.shadow.material.opacity = b.resolved ? Math.max(0, 0.35 - (b.t - 0.46) * 1.4)
-          : 0.2 + 0.28 * k + 0.1 * Math.sin(S.t * 18);
-      }
-      if (b.t >= 1) {
-        scene.remove(b.mesh); if (b.shadow) scene.remove(b.shadow);
-        S.birds.splice(S.birds.indexOf(b), 1); continue;
-      }
-      const p = new THREE.Vector3();
-      if (b.t < 0.5) { const u = b.t / 0.5; p.lerpVectors(b.from, b.to, u); p.y = lerp(b.from.y, b.to.y, u * u); }
-      else { const u = (b.t - 0.5) / 0.5; p.lerpVectors(b.to, b.exit, u); p.y = lerp(b.to.y, b.exit.y, u * u); }
-      b.mesh.position.copy(p);
-      b.mesh.lookAt(b.t < 0.5 ? b.to : b.exit);
-      const f = Math.sin(S.t * 20) * 0.8;
-      b.mesh.userData.wings[0].rotation.y = f; b.mesh.userData.wings[1].rotation.y = -f;
-      if (!b.resolved && b.t >= 0.46) { b.resolved = true; resolveStrike(runner, b.to, 2.8, 'gull'); }
-
-    } else if (b.kind === 'falcon') {
-      b.t += dt;
-      if (b.phase === 'lock') {
-        b.lockT += dt;
-        b.mesh.position.set(runner.x + Math.sin(b.t * 1.2) * 14, 26, runner.z + Math.cos(b.t * 1.2) * 14 - 6);
-        b.mesh.lookAt(runner.x, runner.y, runner.z);
-        b.ring.position.set(runner.x, runner.y + 0.08, runner.z);
-        b.ring.material.opacity = 0.4 + 0.5 * Math.abs(Math.sin(b.t * 9));
-        b.ring.scale.setScalar(lerp(2.2, 1.0, clamp(b.lockT / 2.6, 0, 1)));
-        if (b.lockT > 2.6) {
-          b.phase = 'stoop'; b.t = 0;
-          b.from = b.mesh.position.clone();
-          b.to = new THREE.Vector3(runner.x, runner.y + 0.6, runner.z);
-          AU.sweep(2600, 400, 0.55, 'sawtooth', 0.16);
-        }
-      } else if (b.phase === 'stoop') {
-        const u = clamp(b.t / 0.55, 0, 1);
-        b.mesh.position.lerpVectors(b.from, b.to, u * u);
-        b.mesh.lookAt(b.to);
-        b.ring.material.opacity = 0.9;
-        if (u >= 1 && !b.resolved) {
-          b.resolved = true;
-          resolveStrike(runner, b.to, 4.0, 'falcon');
-          b.phase = 'leave'; b.t = 0; b.from = b.mesh.position.clone();
-          b.to = new THREE.Vector3(runner.x + 30, 30, runner.z - 30);
-          scene.remove(b.ring);
-        }
-      } else {
-        const u = clamp(b.t / 1.2, 0, 1);
-        b.mesh.position.lerpVectors(b.from, b.to, u);
-        if (u >= 1) { scene.remove(b.mesh); S.birds.splice(S.birds.indexOf(b), 1); }
-      }
-    }
-  }
-}
-
-function resolveStrike(runner, at, radius, kind) {
-  const sheltered = !!runner.refuge && runner.refuge.type === 'rock';
-  const d = Math.hypot(runner.x - at.x, runner.z - at.z);
-  if (hasItem('spinach')) {
-    AU.thwack(); toast('PUNTED! +200'); S.stats.punts++; addScore(200);
-    say('POW!', true);
-    particles.burst(at.x, at.y + 0.5, at.z, 14, { color: 0xffe07a, size: 0.4, ttl: 0.6, spread: 3 });
-    return;
-  }
-  if (hasItem('hat') && Math.random() < 0.5) {
-    toast('\u{1F3F4} the gull salutes you'); AU.coin(); return;
-  }
-  if (kind === 'falcon' && sheltered) {
-    toast('SHELTERED! the falcon is furious'); addScore(300); S.stats.dodges++;
-    AU.screech(); return;
-  }
-  if (d < radius) {
-    S.stats.hits++;
-    if (kind === 'falcon') {
-      const lost = S.slots.length;
-      S.slots.length = 0;
-      S.health -= S.diff.birdDmg;
-      runner.kx += (Math.random() - 0.5) * 16; runner.kz += (Math.random() - 0.5) * 16;
-      toast(lost ? 'SCATTERED! lost everything' : 'FALCON HIT!', 'bad');
-      AU.thwack(); say('AAAH!', true);
-    } else if (S.slots.length) {
-      const stolen = S.slots.pop();
-      toast('GULL STOLE YOUR ' + stolen.def.name + '!', 'bad'); AU.poof();
-    } else {
-      S.health -= S.diff.birdDmg;
-      runner.kx += (Math.random() - 0.5) * 9; runner.kz += 4;
-      toast('PECKED! -' + S.diff.birdDmg + ' HP', 'bad'); AU.thwack();
-    }
-    particles.burst(runner.x, runner.y + 1, runner.z, 8, { color: 0xffffff, size: 0.3, ttl: 0.5, spread: 2 });
-  } else {
-    S.stats.dodges++; toast('DODGED! +200'); addScore(200); AU.coin();
-  }
-}
-
-// ---------------- sanderlings: the honest tide tell ----------------
-const sanderlings = [];
-export function buildSanderlings() {
-  for (const s of sanderlings) scene.remove(s.mesh);
-  sanderlings.length = 0;
-  for (let i = 0; i < 16; i++) {
-    const g = new THREE.Group();
-    const b = meshOf(new THREE.SphereGeometry(0.16, 6, 6), 0xf8f4ec, { outlineScale: 1.2 });
-    b.scale.z = 1.5; g.add(b);
-    const bk = meshOf(new THREE.ConeGeometry(0.03, 0.16, 4), 0x33302c, { outline: false });
-    bk.rotation.x = Math.PI / 2; bk.position.z = 0.22; g.add(bk);
-    scene.add(g);
-    sanderlings.push({ mesh: g, x: W.xMin + Math.random() * (W.xMax - W.xMin), off: Math.random() * 2.6, ph: Math.random() * 6.3 });
-  }
-}
-export function updateSanderlings(t) {
-  for (const s of sanderlings) {
-    const z = waveZ + 0.9 + s.off + Math.sin(t * 3 + s.ph) * 0.35;
-    s.mesh.position.set(s.x + Math.sin(t * 2.2 + s.ph) * 1.4, groundY(s.x, z) + 0.16, z);
-    s.mesh.rotation.y = Math.cos(t * 2.2 + s.ph) > 0 ? Math.PI / 2 : -Math.PI / 2;
-    s.mesh.position.y += Math.abs(Math.sin(t * 14 + s.ph)) * 0.04;
-  }
-}
-
-// ============================================================
 // EVENTS — the beach does things to you
 // ============================================================
 function cloudMesh() {
@@ -796,9 +588,9 @@ export function updateEvents(dt, runner) {
 export function generateLevel(runner) {
   while (levelGroup.children.length) levelGroup.remove(levelGroup.children[0]);
   S.refuges = []; S.items = []; S.fx = [];
-  for (const b of S.birds) { scene.remove(b.mesh); if (b.ring) scene.remove(b.ring); if (b.shadow) scene.remove(b.shadow); }
-  S.birds = [];
-  S.combo = 0;
+  clearFlock();
+  // attention carries between beaches: the birds remember an interesting person
+  S.combo = 0; S.aggro *= 0.5; S.eagleTimer = 0; S.freeze = 0; S.thiefAt = false;
   if (S.ev) {
     for (const c of S.ev.clouds) scene.remove(c.mesh);
     if (S.ev.focus) scene.remove(S.ev.focus.ring);
@@ -849,16 +641,29 @@ export function generateLevel(runner) {
     for (let i = 1; i <= 3; i++) S.refuges.push(buildRefuge('rock', W.goalX - 13 + i * 3.2, lerp(z, gz, i / 3), rng));
   }
 
-  // ---- loot: safe stuff on the route, the good stuff out in the dunes
-  let ix = W.startX + 12;
-  while (ix < W.goalX - 10) {
-    ix += (12 + rng() * 8) / S.diff.loot;
-    const dune = rng() < 0.35;
-    const iz = dune ? 19 + rng() * 8 : -2 + rng() * 18;
-    S.items.push(buildItemPickup(rollItem(rng, dune ? 2 : 1), ix, iz));
+  // ---- loot. Most of it sits ON the refuge route, so simply playing well
+  // builds your kit; the rare stuff is out in the dunes where it's hot.
+  const lootMul = S.diff.loot * buildStats().loot;
+  const spine = S.refuges.filter(r => r.x > W.startX + 6);
+  for (const r of spine) {
+    if (rng() > 0.55 * lootMul) continue;
+    // sat right on the refuge: reaching safety and kitting out are the same move
+    const a = rng() * Math.PI * 2;
+    const ix = clamp(r.x + Math.cos(a) * rng() * 1.2, W.xMin, W.goalX - 6);
+    const iz = clamp(r.z + Math.sin(a) * rng() * 1.2, -3, 24);
+    const it = buildItemPickup(rollItem(rng, false), ix, iz);
+    it.mesh.position.y += r.h;                      // sit on top of the driftwood
+    S.items.push(it);
   }
+  let dx = W.startX + 16;
+  while (dx < W.goalX - 10) {                       // risky dune caches
+    dx += 18 + rng() * 14;
+    S.items.push(buildItemPickup(rollItem(rng, true), dx, 19 + rng() * 8));
+  }
+  // a plover works this beach from level 3 on, running its little con
+  if (S.level >= 3 && rng() < 0.55) spawnPlover(runner);
 
-  S.levelTime = 0; S.aggro = 0; S.streak = 0;
+  S.levelTime = 0; S.streak = 0;
   S.stats.cleanLevel = true; S.stats.pacifist = true;
   runner.reset();
   AU.jingleI = 0;

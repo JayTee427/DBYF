@@ -12,9 +12,17 @@ import {
   paintSand, updateHaze, faceHaze, sunSprite, WEATHER,
 } from './world.js';
 import {
-  Runner, ITEMS, GOALS, generateLevel, updateBirds, spawnGullRaid, spawnFalcon,
-  updateEvents, updateSanderlings, particles, prints, wire, levelGroup,
+  Runner, GOALS, generateLevel, updateEvents, particles, prints, wire, levelGroup,
 } from './actors.js';
+import {
+  ITEMS, SYNERGIES, buildStats, activeSynergies, grant, removeItem, findItem,
+  readyActive, tickCooldowns, checkSynergies, resetSynergies, hasItem as hasIt,
+} from './items.js';
+import {
+  flock, updateBirds, updateSanderlings, scatterAt, clearFlock,
+  spawnThief, spawnVulture, spawnFalcon, spawnEagle,
+} from './birds.js';
+import { wireBus } from './bus.js';
 import { AU, say, OW } from './audio.js';
 
 // ---------------- renderer & camera ----------------
@@ -43,6 +51,7 @@ const D = {
   slots: [$('s0'), $('s1'), $('s2')],
   state: $('heatstate'), toasts: $('toasts'), vig: $('vignette'), flash: $('flash'),
   arrow: $('arrow'), scoutHint: $('scoutHint'), combo: $('combo'),
+  banner: $('banner'), ability: $('ability'), swapHint: $('swapHint'), syn: $('syn'),
   ilTitle: $('ilTitle'), ilLines: $('ilLines'), ilNext: $('ilNext'),
   verdict: $('verdict'), epitaph: $('epitaph'), card: $('card'), finalScore: $('finalScore'),
   initials: $('initials'), cells: [$('c0'), $('c1'), $('c2')], hs: $('hsrows'),
@@ -57,7 +66,16 @@ function toast(text, kind) {
   setTimeout(() => d.remove(), 1800);
 }
 function addScore(n) { S.score += Math.round(n * S.diff.mult); }
+function banner(title, sub) {
+  D.banner.innerHTML = `<b>${title}</b><span>${sub || ''}</span>`;
+  D.banner.classList.remove('hidden');
+  D.banner.style.animation = 'none'; void D.banner.offsetWidth;
+  D.banner.style.animation = '';
+  clearTimeout(banner._t);
+  banner._t = setTimeout(() => D.banner.classList.add('hidden'), 2600);
+}
 wire(toast, addScore);
+wireBus({ toast, score: addScore, banner, shake: (v) => { cam.shake = Math.max(cam.shake, v); } });
 
 // ---------------- input ----------------
 const keys = new Set();
@@ -68,6 +86,12 @@ addEventListener('keydown', (e) => {
   keys.add(e.code);
   if (e.code === 'Space') e.preventDefault();
   if (e.code === 'KeyE') useItem();
+  if (e.code === 'KeyF' && nearItem) {                 // swap into a full build
+    const out = S.slots[0];
+    toast('dropped ' + out.def.icon + ' ' + out.def.name + ' for it', 'warn');
+    takeItem(nearItem.it);
+    nearItem = null;
+  }
   if (e.code === 'KeyM') { const m = AU.toggleMute(); toast(m ? '🔇 MUTED' : '🔊 SOUND ON'); syncVolUI(); }
   if (e.code === 'BracketLeft') { AU.setVolume(AU.volume - 0.1); syncVolUI(); }
   if (e.code === 'BracketRight') { AU.setVolume(AU.volume + 0.1); syncVolUI(); }
@@ -125,52 +149,105 @@ syncVolUI();
 // ---------------- the runner ----------------
 const runner = new Runner();
 
-// ---------------- items ----------------
-function grantItem(key) {
-  const def = ITEMS[key];
-  const inst = { key, def, t: def.dur ?? Infinity, shield: def.shield || 0, uses: def.uses || 0 };
-  S.slots.push(inst);
-  if (S.slots.length > 3) {
-    const out = S.slots.shift();
-    toast('↻ rotated out: ' + out.def.name, 'warn');
-    AU.poof();
-  }
-  S.stats.items++; addScore(50); AU.pickup();
-  toast('+ ' + def.icon + ' ' + def.name + ' — ' + def.blurb);
-  if (key === 'pizza') { S.health = Math.min(100, S.health + 28); }
-  if (key === 'spinach') { AU.shanty(); say('SPINACH TIME!', true); }
-  if (key === 'duck') say('quack.', false);
-  if (key === 'bottle') buildCoolRoute();
-}
-function dropSlot(inst) { const i = S.slots.indexOf(inst); if (i >= 0) S.slots.splice(i, 1); }
+// ---------------- abilities [E] ----------------
+let surfing = 0, planted = null;
 function useItem() {
-  if (S.mode !== 'play' || !runner.grounded) return;
-  const oar = S.slots.find(s => s.key === 'oar' && s.uses > 0);
-  if (oar) {
-    oar.uses--;
-    runner.vy = 4.6; runner.grounded = false;
-    runner.kx += Math.sin(runner.facing) * 17; runner.kz += Math.cos(runner.facing) * 17;
-    toast('OAR VAULT!'); AU.sweep(300, 700, 0.25, 'triangle', 0.16);
-    if (oar.uses <= 0) { dropSlot(oar); toast('the oar snapped', 'warn'); }
-    return;
+  if (S.mode !== 'play') return;
+  const inst = readyActive();
+  if (!inst) { AU.reject(); return; }
+  if (inst.cd > 0) { toast(inst.def.name + ' still cooling (' + Math.ceil(inst.cd) + 's)', 'warn'); AU.reject(); return; }
+  if (inst.charges <= 0) { AU.reject(); return; }
+  const id = inst.def.active.id;
+
+  if (id === 'vault') {
+    if (!runner.grounded) { AU.reject(); return; }
+    runner.vy = 5.0; runner.grounded = false;
+    runner.kx += Math.sin(runner.facing) * 19; runner.kz += Math.cos(runner.facing) * 19;
+    toast('OAR VAULT!'); AU.sweep(300, 700, 0.25, 'triangle', 0.1);
+
+  } else if (id === 'surf') {
+    surfing = 1.7;
+    runner.kx += Math.sin(runner.facing) * 20; runner.kz += Math.cos(runner.facing) * 20;
+    S.stamina = Math.min(STAM.max, S.stamina + 25);
+    toast('SURFING! feet off the sand'); AU.sweep(500, 900, 0.4, 'sine', 0.08);
+
+  } else if (id === 'douse') {
+    S.feet.L = Math.max(0, S.feet.L - 55); S.feet.R = Math.max(0, S.feet.R - 55);
+    inst.charges--;
+    toast('SPLOSH — ' + inst.charges + ' left (refill in the sea)');
+    AU.splash(false);
+    particles.burst(runner.x, runner.y + 0.4, runner.z, 14, { color: 0xd8f4ff, size: 0.34, ttl: 0.7, spread: 2 });
+
+  } else if (id === 'punch') {
+    const n = scatterAt(runner.x, runner.z, 11, true);
+    S.stats.punts += n;
+    toast(n ? 'POW! ×' + n : 'you punch the air, heroically');
+    AU.thwack(); AU.shanty(); say('POW!', true);
+    cam.shake = 0.8;
+    particles.burst(runner.x, runner.y + 1.2, runner.z, 18, { color: 0xffe07a, size: 0.4, ttl: 0.6, spread: 3.4 });
+
+  } else if (id === 'net') {
+    const n = scatterAt(runner.x, runner.z, 15, true);
+    toast(n ? 'NETTED ×' + n : 'the net catches nothing but sand');
+    AU.poof();
+
+  } else if (id === 'blink') {
+    const d = 16;
+    const tx = clamp(runner.x + Math.sin(runner.facing) * d, W.xMin, W.xMax);
+    const tz = clamp(runner.z + Math.cos(runner.facing) * d, W.zMin, W.zMax);
+    particles.burst(runner.x, runner.y + 0.8, runner.z, 12, { color: 0xbfe8ff, size: 0.34, ttl: 0.5, spread: 2 });
+    runner.x = tx; runner.z = tz; runner.y = groundY(tx, tz);
+    runner.kx = 0; runner.kz = 0;
+    toast('THUNK — you are over there now'); AU.tone(420, 0.14, 'triangle', 0.09);
+    particles.burst(tx, runner.y + 0.8, tz, 12, { color: 0xbfe8ff, size: 0.34, ttl: 0.5, spread: 2 });
+
+  } else if (id === 'freeze') {
+    S.freeze = 4.0;
+    toast('\u{23F1} TIME STOPS. the sun looks annoyed.');
+    AU.sweep(900, 300, 0.7, 'sine', 0.08); say('ha!', true);
+
+  } else if (id === 'plant') {
+    if (planted) scene.remove(planted.mesh);
+    const mesh = new THREE.Group();
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 3.2, 8), new THREE.MeshBasicMaterial({ color: 0xe8e0cc }));
+    pole.position.y = 1.6; mesh.add(pole);
+    const top = new THREE.Mesh(new THREE.ConeGeometry(3.0, 1.1, 12), new THREE.MeshBasicMaterial({ color: 0xff5233 }));
+    top.position.y = 3.2; mesh.add(top);
+    mesh.position.set(runner.x, groundY(runner.x, runner.z), runner.z);
+    scene.add(mesh);
+    planted = { mesh, x: runner.x, z: runner.z, r: 6 };
+    S.ev.clouds.push({ x: runner.x, z: runner.z, r: 6, mesh: { position: { set() { } } }, life: 9999, vx: 0 });
+    toast('\u{26F1} shade, planted. it stays.');
+    AU.land(false);
   }
-  const bb = S.slots.find(s => s.key === 'boogie' && s.uses > 0);
-  if (bb) {
-    bb.uses--;
-    runner.kx += Math.sin(runner.facing) * 22; runner.kz += Math.cos(runner.facing) * 22;
-    S.stamina = Math.min(STAM.max, S.stamina + 30);
-    toast('SURF THE SAND!'); AU.sweep(500, 900, 0.4, 'sine', 0.13);
-    if (bb.uses <= 0) { dropSlot(bb); toast('the board split', 'warn'); }
-    return;
-  }
-  AU.reject();
+
+  inst.cd = inst.def.active.cd;
 }
-function heatResist() {
-  let m = 1;
-  if (hasItem('sandals')) m *= 0.38;
-  if (hasItem('sunscreen')) m *= 0.62;
-  if (hasItem('cap')) m *= 0.86;
-  return m;
+// ---------------- taking loot ----------------
+let nearItem = null;
+function takeItem(it) {
+  it.taken = true;
+  levelGroup.remove(it.mesh);
+  // duplicates would stack multiplicatively into nonsense — cash them in instead
+  if (hasIt(it.key)) {
+    addScore(250);
+    toast('already got ' + ITEMS[it.key].icon + ' — cashed in for 250');
+    AU.coin();
+    return;
+  }
+  particles.burst(it.x, groundY(it.x, it.z) + 0.8, it.z, 8,
+    { color: ITEMS[it.key].rarity >= 2 ? 0xffd94a : 0xbfe8ff, size: 0.32, ttl: 0.6, spread: 1.7 });
+  grant(it.key);
+  addScore(60);
+  if (it.key === 'bottle') buildCoolRoute();
+}
+/** Bucket refills itself whenever you stand in the sea. */
+function refillWetGear(inWater) {
+  if (!inWater) return;
+  const b = findItem('bucket');
+  if (b && b.charges < 2) { b.charges = 2; }
+  const k = findItem('kelp');
+  if (k && k.shield < (ITEMS.kelp.shield || 60)) k.shield = ITEMS.kelp.shield;
 }
 
 // ---------------- message-in-a-bottle: reveal a cool route ----------------
@@ -324,15 +401,26 @@ function die() {
     ['Refuges used', s.refugesUsed],
     ['Best SOLE TRAIN', '×' + s.bestCombo],
     ['Desperate leaps', s.leaps],
+    ['Flock raids survived', s.raids],
     ['Birds dodged', s.dodges],
     ['Birds... not dodged', s.hits],
+    ['Robbed by seagulls', s.thefts],
+    ['Loot chased down', s.recovered],
+    ['Fell for the plover act', s.conned],
     ['Towel crabs met', s.crabs],
     ['Items beachcombed', s.items],
     ['Total time', S.runTime.toFixed(1) + 's'],
     ['Diagnosis', S.level > 2 ? 'a legend, briefly' : 'why did you do this'],
   ];
+  const buildLine = S.slots.length
+    ? S.slots.map(s => s.def.icon + ' ' + s.def.name).join('  ·  ')
+    : 'nothing but your own two feet';
+  const syn = activeSynergies().map(s => '★ ' + s.name).join('  ');
   D.card.innerHTML = rows.map(r => `<div class="row"><span>${r[0]}</span><span>${r[1]}</span></div>`).join('')
-    + `<div class="row bonus"><span>DISTANCE CONSOLATION</span><span>+${consolation}</span></div>`;
+    + `<div class="row bonus"><span>DISTANCE CONSOLATION</span><span>+${consolation}</span></div>`
+    + `<div class="row" style="margin-top:6px;border-top:2px solid var(--line);padding-top:6px">
+         <span>FINAL BUILD</span><span style="max-width:16em;text-align:right">${buildLine}</span></div>`
+    + (syn ? `<div class="row bonus"><span>SYNERGIES</span><span>${syn}</span></div>` : '');
   D.finalScore.textContent = 'SCORE: 0';
   let shown = 0, tickN = 0;
   const step = Math.max(1, Math.round(S.score / 45));
@@ -415,29 +503,29 @@ function simulate(dt) {
   const { inWater, refuge } = st;
 
   // ---------- heat ----------
-  const resist = heatResist();
-  const cool = hasItem('popsicle') ? 30 : 0;
+  const build = buildStats();
   const shade = shadeAt(runner.x, runner.z);
   const airborne = !runner.grounded;
+  surfing = Math.max(0, surfing - dt);
+  refillWetGear(inWater);
   let rate;
   if (inWater) rate = HEAT.coolWater;
-  else if (airborne) rate = HEAT.coolAir;
+  else if (airborne || surfing > 0) rate = HEAT.coolAir;
   else if (refuge) rate = HEAT.coolRefuge;
   else {
     const h = heatAt(runner.x, runner.z, S.t) * effHeat();
     if (h < HEAT.safe) rate = HEAT.coolCool - wetness(runner.z, S.t) * 12;
     else if (shade > 0.35) rate = HEAT.coolShade;
-    else rate = (h - HEAT.safe) * HEAT.burnRate * resist;
+    else rate = (h - HEAT.safe) * HEAT.burnRate * build.heat;
   }
-  rate -= cool;
 
-  // kelp soaks up incoming heat until it gives out
+  // kelp soaks up incoming heat until it gives out (recharges in the sea)
   if (rate > 0) {
-    const kelp = S.slots.find(s => s.key === 'kelp' && s.shield > 0);
-    if (kelp) {
+    const kelp = findItem('kelp');
+    if (kelp && kelp.shield > 0) {
       const absorb = Math.min(kelp.shield, rate * dt);
       kelp.shield -= absorb; rate -= absorb / dt;
-      if (kelp.shield <= 0) { dropSlot(kelp); toast('the kelp gave its life', 'warn'); AU.poof(); }
+      if (kelp.shield <= 0) toast('the kelp is spent — soak it in the sea', 'warn');
     }
   }
   // the planted foot takes the brunt — alternating is how you survive
@@ -482,48 +570,51 @@ function simulate(dt) {
   if (worst < 25 && S.health < 100) S.health += 2.2 * dt;
   S.health = clamp(S.health, 0, 100);
 
-  // ---------- bird aggro ----------
-  // Several things draw them in, so the birds are a live pressure everywhere
-  // on the beach — not a system you only meet if you paddle.
-  let ag = -8;
-  if (inWater) { ag = 26; S.stats.waterTime += dt; }
-  else if (runner.z < waveZ + 3) ag = 15;
+  // ---------- how interesting are you? ----------
+  // Attention isn't an abstract bar any more: it decides how many gulls
+  // physically land near you and start edging in. You can watch it happen.
+  // a slow baseline so the flock is always quietly assembling somewhere behind
+  // you — the beach is never empty of birds for long
+  let ag = 3.2;
+  if (inWater) { ag = 24; S.stats.waterTime += dt; }
+  else if (runner.z < waveZ + 3) ag = 14;
   if (S.heatState >= 4) ag += 15;                     // you smell like lunch
   else if (S.heatState === 3) ag += 6;
-  if (hasItem('pizza')) ag += 12;
-  if (hasItem('cap')) ag -= 3;                        // harder to spot
-  if (ag > 0) ag *= effAggro();
-  if (hasItem('spinach')) ag = Math.min(ag, -14);
-  if (hasItem('hat')) ag *= 0.7;                      // a captain commands respect
+  if (runner.speed < 0.5 && !refuge) ag += 3;         // dawdling in the open
+  if (ag > 0) ag *= effAggro() * build.aggro;
+  if (S.eagleTimer > 0) ag = Math.min(ag, -30);       // nobody dares while he's up
   S.aggro = clamp(S.aggro + ag * dt, 0, 100);
-  if (S.aggro >= 100 && S.birds.length === 0) {
-    S.stats.pacifist = false;
-    if (S.level >= 6 && Math.random() < 0.4) spawnFalcon(runner); else spawnGullRaid(runner);
-    S.aggro = 30;
-  }
-  updateBirds(dt, runner);
-  updateEvents(dt, runner);
+  if (S.aggro > 55) S.stats.pacifist = false;
 
-  // ---------- items ----------
-  for (const s of [...S.slots]) {
-    if (isFinite(s.t)) {
-      s.t -= dt;
-      if (s.t <= 0) {
-        dropSlot(s); AU.poof();
-        toast(s.def.icon + ' ' + s.def.name + (s.key === 'sandals' ? ' flew off!' : ' expired'), 'warn');
-        if (s.key === 'bottle') clearRoute();
-      }
+  // special guests
+  if (S.freeze <= 0) {
+    if (S.level >= 4 && !S.thiefAt && S.levelTime > 8 && Math.random() < 0.25 * dt) {
+      S.thiefAt = true; spawnThief(runner);
     }
+    if (S.heatState >= 4 && Math.random() < 0.5 * dt) spawnVulture(runner);
+    if (S.level >= 6 && S.aggro > 80 && Math.random() < 0.12 * dt) spawnFalcon(runner);
+    const wantEagle = build.eagle ? 0.05 : 0.008;
+    if (S.level >= 3 && S.eagleTimer <= 0 && Math.random() < wantEagle * dt) spawnEagle(runner, build.eagle);
   }
+
+  S.freeze = Math.max(0, S.freeze - dt);
+  updateBirds(dt, runner, S.freeze > 0);
+  if (S.freeze <= 0) updateEvents(dt, runner);
+  tickCooldowns(dt);
+  // charging through loiterers scatters them — you're not helpless
+  if (runner.speed > 8.5) scatterAt(runner.x, runner.z, 2.4, false);
+
+  // ---------- loot: free slot auto-takes, a full build makes you choose ----------
+  nearItem = null;
   for (const it of S.items) {
     if (it.taken) continue;
     it.ph += dt * 2.4;
     it.box.rotation.y = it.ph;
     it.box.position.y = 0.55 + Math.sin(it.ph) * 0.14;
-    if (Math.hypot(runner.x - it.x, runner.z - it.z) < 2.2) {
-      it.taken = true; levelGroup.remove(it.mesh);
-      particles.burst(it.x, it.y + 0.8, it.z, 8, { color: 0xffe07a, size: 0.3, ttl: 0.6, spread: 1.6 });
-      grantItem(it.key);
+    const d = Math.hypot(runner.x - it.x, runner.z - it.z);
+    if (d < 2.9) {
+      if (S.slots.length < S.maxSlots) takeItem(it);
+      else if (!nearItem || d < nearItem.d) nearItem = { it, d };
     }
   }
 
@@ -613,12 +704,39 @@ function updateHUD() {
   D.slots.forEach((el, i) => {
     const s = S.slots[i];
     if (!s) { el.className = 'slot empty'; el.innerHTML = '<span class="e">empty</span>'; return; }
-    el.className = 'slot' + (s.def.tier === 2 ? ' rare' : '');
-    let sub = isFinite(s.t) ? Math.ceil(s.t) + 's'
-      : s.uses ? s.uses + '× [E]'
-      : s.shield ? Math.ceil(s.shield) + ' shield' : '∞';
+    el.className = 'slot r' + (s.def.rarity || 1);
+    let sub = '';
+    if (s.def.active) sub = s.cd > 0 ? Math.ceil(s.cd) + 's' : '[E]';
+    if (s.def.charges !== undefined) sub = s.charges + '× ' + (s.cd > 0 ? Math.ceil(s.cd) + 's' : '[E]');
+    else if (s.def.shield) sub = Math.round(s.shield) + ' shield';
+    else if (!s.def.active) sub = s.def.cursed ? 'CURSED' : 'passive';
     el.innerHTML = `<span class="ic">${s.def.icon}</span><span class="nm">${s.def.name}</span><span class="tm">${sub}</span>`;
   });
+
+  // active ability prompt
+  const act = readyActive();
+  if (act) {
+    D.ability.classList.remove('hidden');
+    const ready = act.cd <= 0 && act.charges > 0;
+    D.ability.className = ready ? 'ready' : 'cooling';
+    D.ability.innerHTML = `<b>E</b> ${act.def.icon} ${act.def.active.label}` +
+      (ready ? '' : ` <i>${Math.ceil(act.cd)}s</i>`);
+  } else D.ability.classList.add('hidden');
+
+  // swap prompt when your build is full and you're standing on loot
+  if (nearItem) {
+    const d = ITEMS[nearItem.it.key];
+    D.swapHint.classList.remove('hidden');
+    D.swapHint.innerHTML = `${d.icon} <b>${d.name}</b> — ${d.desc}<br>` +
+      `<b>F</b> to take (drops ${S.slots[0].def.icon} ${S.slots[0].def.name})`;
+  } else D.swapHint.classList.add('hidden');
+
+  // live synergy list
+  const syns = activeSynergies();
+  if (syns.length) {
+    D.syn.classList.remove('hidden');
+    D.syn.innerHTML = syns.map(s => `<span>★ ${s.name}</span>`).join('');
+  } else D.syn.classList.add('hidden');
 }
 
 // ---------------- attract mode ----------------
@@ -648,7 +766,7 @@ function loop() {
   updateOcean(S.t);
   paintAcc -= dt;
   if (paintAcc <= 0) { paintAcc = 0.1; paintSand(S.t); }
-  updateSanderlings(S.t);
+  updateSanderlings(S.t, waveZ);
   particles.update(dt);
   prints.update(dt);
 
@@ -680,13 +798,15 @@ loop();
 // ---------------- debug / balance handle ----------------
 window.DBYF = {
   S, runner, camera, cam, keys, input, renderer, scene, AU,
+  ITEMS, SYNERGIES, buildStats, activeSynergies, grant, readyActive, flock,
+  spawnThief, spawnVulture, spawnFalcon, spawnEagle, scatterAt, useItem,
   levelComplete, die, nextLevel, generateLevel: () => generateLevel(runner),
   /** headless tick. `visual` does the expensive repaint; skip it for balance sims. */
   step(dt = 0.016, visual = true) {
     S.t += dt; readInput(); updateTide(S.t);
     if (S.mode === 'play' || S.mode === 'scout') { simulate(dt); if (visual) updateHUD(); }
     if (!visual) return;
-    updateOcean(S.t); paintSand(S.t); updateSanderlings(S.t);
+    updateOcean(S.t); paintSand(S.t); updateSanderlings(S.t, waveZ);
     updateCamera(dt); faceHaze(camera);
   },
   /** synchronous render → downscaled JPEG, so the art can be inspected headlessly */

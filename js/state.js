@@ -48,6 +48,7 @@ export const S = {
   slots: [],
   score: 0, levelBanked: 0,
   combo: 0, comboT: 0,
+  maxSlots: 3, eagleTimer: 0, nextGullAt: 0, freeze: 0,
   stats: null,
   refuges: [], items: [], birds: [], props: [], fx: [],
   ev: null,
@@ -62,6 +63,7 @@ export function freshStats() {
     steps: 0, hotSteps: 0, refugesUsed: 0, dodges: 0, hits: 0,
     items: 0, crabs: 0, punts: 0, maxL: 0, maxR: 0, maxState: 0,
     scouts: 0, waterTime: 0, leaps: 0, bestCombo: 0, cleanLevel: true, pacifist: true,
+    raids: 0, thefts: 0, recovered: 0, conned: 0, scattered: 0,
   };
 }
 
