@@ -24,7 +24,8 @@ permanent roguelike builds, a living bird flock, arcade scoring.
 | Items (31) | permanent for the run, 3 slots (4 with shorts), auto-pickup with the ejected item dropping on the sand, 10 actives on [E], 8 synergies, cursed items, single-shoe items that protect one foot, **6-7** instant invincibility |
 | Birds (9) | gulls wheel overhead in a growing mob → peel off into telegraphed dives → **steal an item you can chase down**; Heermann's thief, plover broken-wing con, willet tripwires, least terns, pelican squadrons, vulture, falcon lock-on, bald eagle, and the Wash Prophet |
 | Arcade | Hall of Soles **persisted to `scores.json`**, 3-initial entry, podiatrist report card, 4 difficulties |
-| Audio | soft master bus, volume slider, M to mute, persisted |
+| Audio | soft master bus, volume slider, M mute, **N music**, persisted |
+| Music | `music.js` — a live-synthesized surf-rock score: walking bass, brushed drums, twangy pentatonic lead through a plate. Weather sets the mood (118bpm clear → 92 marine layer), your predicament sets the intensity. |
 
 ### Tooling worth remembering
 - `serve.py` accepts **POST /_shot** — the page posts a canvas dataURL, it lands in

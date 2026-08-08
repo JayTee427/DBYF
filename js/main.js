@@ -27,6 +27,7 @@ import {
 } from './birds.js';
 import { wireBus } from './bus.js';
 import { AU, say, OW } from './audio.js';
+import { MUSIC } from './music.js';
 
 // ---------------- renderer & camera ----------------
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -139,6 +140,7 @@ addEventListener('keydown', (e) => {
   keys.add(e.code);
   if (e.code === 'Space') e.preventDefault();
   if (e.code === 'KeyE') useItem();
+  if (e.code === 'KeyN') { const on = MUSIC.toggle(); toast(on ? '🎵 MUSIC ON' : '🎵 MUSIC OFF'); }
   if (e.code === 'KeyM') { const m = AU.toggleMute(); toast(m ? '🔇 MUTED' : '🔊 SOUND ON'); syncVolUI(); }
   if (e.code === 'BracketLeft') { AU.setVolume(AU.volume - 0.1); syncVolUI(); }
   if (e.code === 'BracketRight') { AU.setVolume(AU.volume + 0.1); syncVolUI(); }
@@ -385,6 +387,7 @@ function startRun(diffKey) {
   D.inter.classList.add('hidden'); D.pause.classList.add('hidden');
   D.hud.classList.remove('hidden');
   AU.ensure(); AU.resume(); tryLock();
+  if (AU.ctx) { MUSIC.init(AU.ctx, AU.master); MUSIC.start(S.weather.key); }
   announce();
 }
 function announce() {
@@ -410,6 +413,7 @@ $('btnRetry').addEventListener('click', () => startRun(S.diffKey));
 $('btnTitle').addEventListener('click', () => {
   D.end.classList.add('hidden'); D.hud.classList.add('hidden');
   D.title.classList.remove('hidden'); S.mode = 'title';
+  if (AU.ctx) { MUSIC.init(AU.ctx, AU.master); MUSIC.start('title'); }
   renderScores(); document.exitPointerLock?.();
 });
 
@@ -462,6 +466,7 @@ function nextLevel() {
   generateLevel(runner);
   D.inter.classList.add('hidden');
   S.mode = 'play';
+  MUSIC.setMood(S.weather.key);        // the new beach's weather rescores it
   announce();
 }
 
@@ -486,6 +491,7 @@ function beginDeath() {
   hitStop(0.35);
   cam.shake = 1.4;
   flashScreen(0.55, 500);
+  MUSIC.stop(1.6);
   AU.sad();
   say(['tell my shoes... I loved them.', 'I regret... the sandals...', 'so... close...'][Math.floor(Math.random() * 3)], true);
   particles.burst(runner.x, runner.y + 0.5, runner.z, 24,
@@ -942,6 +948,16 @@ function simulate(dt) {
     toast('\u{1F525} THE FINAL GAUNTLET \u{1F525}', 'bad');
     say('the last stretch. it always burns.', true);
   }
+  // the score follows your predicament: cooking feet, a mob overhead, a
+  // dive already in the air, or the desperate last stretch to the goal
+  const diving = flock.some(b => b.state === 'dive' || b.state === 'stoop' || b.state === 'peel');
+  MUSIC.setIntensity(clamp(
+    Math.max(S.feet.L, S.feet.R) / 130
+    + S.aggro / 260
+    + (diving ? 0.3 : 0)
+    + (S.shoes > 0 ? 0.25 : 0)
+    + (gd < 45 ? 0.2 : 0), 0, 1));
+
   D.goalLbl.textContent = S.goal.def.icon + ' ' + S.goal.def.name + '  ' + Math.max(0, Math.round(gd)) + 'm';
   if (gd < S.goal.def.r) { levelComplete(); return; }
   if (S.health <= 0) { beginDeath(); return; }
@@ -1159,7 +1175,7 @@ loop();
 
 // ---------------- debug / balance handle ----------------
 window.DBYF = {
-  S, runner, camera, cam, keys, input, renderer, scene, AU,
+  S, runner, camera, cam, keys, input, renderer, scene, AU, MUSIC,
   ITEMS, SYNERGIES, buildStats, activeSynergies, grant, readyActive, flock,
   spawnThief, spawnVulture, spawnFalcon, spawnEagle, scatterAt, useItem, dropItem,
   spawnTerns, spawnPelicanLine, fireEvent, buildChestAt,
