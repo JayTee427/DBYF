@@ -32,7 +32,12 @@ export const GOALS = {
   umbrella:  { icon: '\u{26F1}',  name: 'UMBRELLA CAMP',    r: 5.0, beacon: 'ping',   z: [6, 16],  gauntlet: false,
                line: 'shade! sweet shade!' },
   tidepools: { icon: '\u{1FAA8}', name: 'THE TIDE POOLS',   r: 5.5, beacon: 'chime',  z: [-6, 0],  gauntlet: false,
+               lowTide: true, hold: 1.2, verb: 'WADING IN',
                line: 'hello little crabs. I live here now.' },
+  // the last designed goal: up off the sand at last, via scorching asphalt
+  stairs:    { icon: '\u{1FA9C}', name: 'THE BOARDWALK STAIRS', r: 5.0, beacon: 'ping', z: [26, 30], gauntlet: true,
+               asphalt: true,
+               line: 'wood. blessed, ordinary wood.' },
   nursery:   { icon: '\u{1F9AD}', name: 'THE SEAL NURSERY', r: 6.5, beacon: 'bark',   z: [-5, 1],  gauntlet: false, hold: 1.8, quiet: 7.2, verb: 'APPROACHING',
                line: 'the seals... the seals approve of me.' },
   parking:   { icon: '\u{1F697}', name: 'THE PARKING LOT',  r: 5.5, beacon: 'alarm',  z: [22, 28], gauntlet: true,
@@ -712,6 +717,25 @@ function buildGoal(key, x, z) {
     }
     const flag = emojiSprite('\u{1F6FB}', 3.0); flag.position.y = 6.6; g.add(flag);
 
+  } else if (key === 'stairs') {
+    // a strip of blacktop, then steps up onto honest wood
+    const lot = meshOf(new THREE.BoxGeometry(20, 0.16, 7), 0x3f3f46);
+    lot.position.set(-7, 0.08, -3); g.add(lot);
+    for (let i = 0; i < 5; i++) {
+      const step = meshOf(new THREE.BoxGeometry(5.5, 0.34, 1.2), 0xa98155);
+      step.position.set(0, 0.3 + i * 0.34, 0.9 + i * 1.1); g.add(step);
+    }
+    const deck = meshOf(new THREE.BoxGeometry(9, 0.34, 5.5), 0xb98f5e);
+    deck.position.set(0, 2.0, 8.0); g.add(deck);
+    for (const sx of [-4.2, 4.2]) {
+      const rail = meshOf(new THREE.BoxGeometry(0.16, 0.9, 5.4), 0xcaa170);
+      rail.position.set(sx, 2.6, 8.0); g.add(rail);
+    }
+    const lamp = meshOf(new THREE.CylinderGeometry(0.11, 0.14, 4.2, 6), 0x4a4a52);
+    lamp.position.set(4.6, 4.2, 8.0); g.add(lamp);
+    const bulb = meshOf(new THREE.SphereGeometry(0.42, 8, 8), 0xfff3c4, { outline: false });
+    bulb.position.set(4.6, 6.4, 8.0); g.add(bulb);
+
   } else if (key === 'parking') {
     const lot = meshOf(new THREE.BoxGeometry(16, 0.14, 11), 0x4a4a52);
     lot.position.y = 0.07; g.add(lot);
@@ -1008,6 +1032,55 @@ export function fireEvent(kind, runner) {
   } else if (kind === 'rescue') {
     startRescue(runner);
 
+  } else if (kind === 'dog') {
+    // a dog, losing its mind over a ball, kicking up cool damp sand as it goes
+    const g = new THREE.Group();
+    const body = meshOf(new THREE.CapsuleGeometry(0.36, 0.85, 4, 8), 0xc89a5e);
+    body.rotation.z = Math.PI / 2; body.position.y = 0.62; g.add(body);
+    const head = meshOf(new THREE.SphereGeometry(0.3, 10, 8), 0xd8ad72);
+    head.position.set(0.78, 0.86, 0); g.add(head);
+    const snout = meshOf(new THREE.BoxGeometry(0.34, 0.22, 0.24), 0xe8c9a4);
+    snout.position.set(1.04, 0.78, 0); g.add(snout);
+    for (const s of [-1, 1]) {
+      const ear = meshOf(new THREE.BoxGeometry(0.1, 0.34, 0.22), 0xa87c46);
+      ear.position.set(0.7, 1.06, s * 0.22); g.add(ear);
+    }
+    const tail = meshOf(new THREE.CylinderGeometry(0.07, 0.05, 0.6, 5), 0xc89a5e);
+    tail.rotation.z = -0.8; tail.position.set(-0.8, 0.9, 0); g.add(tail);
+    const px = clamp(runner.x + 18 + Math.random() * 20, W.xMin, W.goalX - 12);
+    const p = addProp('dog', g, px, clamp(2 + Math.random() * 10, -4, 18),
+      { life: 26, ang: Math.random() * 6.3, tail, lastTrail: 0, barkAt: 0 });
+    // the ball it is chasing
+    const ball = meshOf(new THREE.SphereGeometry(0.3, 10, 8), 0xf0e34a);
+    ball.position.set(px + 14, groundY(px + 14, p.z) + 0.3, p.z);
+    levelGroup.add(ball);
+    p.ball = ball; p.ballX = px + 14; p.ballZ = p.z;
+    toast('\u{1F415} a dog. it is having the best day of its life.');
+    AU.bark(0.07);
+
+  } else if (kind === 'nesting') {
+    // a roped-off snowy plover nesting zone. beautiful cool sand. do not.
+    const g = new THREE.Group();
+    const w = 11, d = 8;
+    for (let i = 0; i <= 6; i++) {
+      for (const [ox, oz] of [[-w / 2 + i * w / 6, -d / 2], [-w / 2 + i * w / 6, d / 2]]) {
+        const post = meshOf(new THREE.CylinderGeometry(0.07, 0.07, 1.1, 5), 0xd8cfc0);
+        post.position.set(ox, 0.55, oz); g.add(post);
+      }
+    }
+    for (const oz of [-d / 2, d / 2]) {
+      const rope = meshOf(new THREE.BoxGeometry(w, 0.06, 0.06), 0xf0e7d6, { outline: false });
+      rope.position.set(0, 0.95, oz); g.add(rope);
+    }
+    const sign = meshOf(new THREE.BoxGeometry(1.5, 1.0, 0.08), 0xf6f1e6);
+    sign.position.set(0, 1.2, -d / 2 - 0.2); g.add(sign);
+    const bird = emojiSprite('\u{1F423}', 1.5); bird.position.set(0, 2.4, -d / 2 - 0.2); g.add(bird);
+    const px = clamp(runner.x + 22 + Math.random() * 26, W.xMin, W.goalX - 14);
+    const pz = clamp(6 + Math.random() * 12, 0, 20);
+    addProp('nesting', g, px, pz, { r: 6.2, caught: false });
+    coolPad(px, pz, 6.0);            // it IS lovely cool sand. that's the trap.
+    toast('\u{1F423} a roped-off plover nest. stay out of it.');
+
   } else if (kind === 'dustdevil') {
     // a small giddy tornado. it is not hostile, it is five years old.
     const g = new THREE.Group();
@@ -1119,7 +1192,7 @@ export function updateEvents(dt, runner) {
     const sunBias = buildStats().sunFocus;
     const pool = [['cloud', 22], ['whale', 15], ['dolphins', 17], ['sealions', 15],
                   ['sandcastle', 15], ['kite', 12], ['detector', 14], ['volleyball', 14],
-                  ['dustdevil', 13], ['surfschool', 11]];
+                  ['dustdevil', 13], ['surfschool', 11], ['dog', 14], ['nesting', 12]];
     if (S.level >= 2) pool.push(['focus', 18 * sunBias], ['sneaker', 14], ['wedding', 11], ['fisherman', 12]);
     if (S.level >= 3) pool.push(['grunion', 8], ['lowtide', 12], ['civilwar', 10]);
     // Rare, and gated hard: level 3+, feet genuinely in trouble, and only once
@@ -1253,6 +1326,57 @@ function updateProps(dt, runner) {
         setTimeout(() => { p.kicked = false; }, 900);
       }
       if (p.life <= 0) dropProp(p);
+
+    } else if (p.kind === 'dog') {
+      p.life -= dt;
+      // charge the ball; when you reach it, it gets thrown again somewhere else
+      const bdx = p.ballX - p.x, bdz = p.ballZ - p.z;
+      const bd = Math.hypot(bdx, bdz);
+      if (bd > 1.2) {
+        p.x += bdx / bd * 8.5 * dt;
+        p.z += bdz / bd * 8.5 * dt;
+      } else {
+        p.ballX = clamp(p.x + (Math.random() - 0.5) * 40, W.xMin + 5, W.xMax - 5);
+        p.ballZ = clamp(p.z + (Math.random() - 0.5) * 16, -6, 20);
+        if (S.t - p.barkAt > 2) { p.barkAt = S.t; AU.bark(0.06); }
+      }
+      p.ball.position.set(p.ballX, groundY(p.ballX, p.ballZ) + 0.3 + Math.abs(Math.sin(S.t * 4)) * 0.2, p.ballZ);
+      p.mesh.position.set(p.x, groundY(p.x, p.z) + Math.abs(Math.sin(S.t * 14)) * 0.09, p.z);
+      p.mesh.rotation.y = Math.atan2(bdx, bdz);
+      p.tail.rotation.x = Math.sin(S.t * 20) * 0.7;
+      // it kicks up damp sand behind it — a genuine, brief cool trail
+      if (S.t - p.lastTrail > 0.28) {
+        p.lastTrail = S.t;
+        const pad = { x: p.x, z: p.z, r: 3.2, life: 6 };
+        S.coolPads.push(pad);
+        p.trails = p.trails || [];
+        p.trails.push(pad);
+        particles.burst(p.x, groundY(p.x, p.z) + 0.1, p.z, 3,
+          { color: 0xd8bc90, size: 0.24, ttl: 0.5, vy: 0.8, spread: 1.2 });
+      }
+      for (const tr of (p.trails || [])) {
+        tr.life -= dt;
+        if (tr.life <= 0) { const i = S.coolPads.indexOf(tr); if (i >= 0) S.coolPads.splice(i, 1); }
+      }
+      if (p.trails) p.trails = p.trails.filter(tr => tr.life > 0);
+      if (p.life <= 0) {
+        for (const tr of (p.trails || [])) { const i = S.coolPads.indexOf(tr); if (i >= 0) S.coolPads.splice(i, 1); }
+        levelGroup.remove(p.ball);
+        dropProp(p);
+      }
+
+    } else if (p.kind === 'nesting') {
+      if (!p.caught && d < p.r) {
+        p.caught = true;
+        S.aggro = 100;
+        S.guilt = 7;
+        bus.banner('GET OUT OF THE NEST', 'a volunteer docent has seen you');
+        toast('\u{1F423} EVERY BIRD ON THE BEACH IS NOW AWARE OF YOU', 'bad');
+        AU.screech(); AU.gullCall();
+        bus.shake(0.7);
+        say(['I am going! I am going!', 'it was cool sand! I am WEAK!'][Math.floor(Math.random() * 2)], true);
+      }
+      if (p.caught && d > p.r + 4) p.caught = false;   // re-arm if you go back in
 
     } else if (p.kind === 'dustdevil') {
       p.life -= dt;
@@ -1786,6 +1910,12 @@ export function generateLevel(runner) {
 
   applyWeather(pickWeather(rng));
   S.windDir = rng() * Math.PI * 2;
+  // ---- the kill screen. Almost nobody will ever see this, which is the point.
+  S.killScreen = S.level >= 256;
+  if (S.killScreen) {
+    applyWeather(WEATHER.noon);
+    S.windDir = 0;
+  }
   rebuildTerrain();
   resetTide();
   buildScenery(rng);
@@ -1798,13 +1928,15 @@ export function generateLevel(runner) {
     else if (S.level === 1) gk = 'truck';
     else if (rng() < 0.16) gk = 'nursery';
     else {
-      const pool = ['truck', 'flipflops', 'shower', 'umbrella', 'tidepools'];
+      const pool = ['truck', 'flipflops', 'shower', 'umbrella', 'tidepools', 'stairs'];
       gk = pool[Math.floor(rng() * pool.length)];
     }
   }
   if (gk !== 'island') S.isIsland = false;
   const gz = GOALS[gk].z[0] + rng() * (GOALS[gk].z[1] - GOALS[gk].z[0]);
   S.goal = buildGoal(gk, W.goalX, gz);
+  // the asphalt gauntlet: blacktop is worse than sand, and it knows it
+  if (GOALS[gk].asphalt) S.hotPads.push({ x: W.goalX - 12, z: gz - 3, r: 15 });
 
   // ---- the spine: a chain of refuges you can actually chain
   S.refuges.push(buildRefuge('towel', W.startX, W.startZ, rng));
@@ -1859,6 +1991,23 @@ export function generateLevel(runner) {
   }
   // a plover works this beach from level 3 on, running its little con
   if (S.level >= 3 && rng() < 0.55) spawnPlover(runner);
+
+  // BEACH 256: there is no more beach. It is all parking lot now.
+  if (S.killScreen) {
+    for (let x = W.startX; x < W.goalX + 20; x += 30) S.hotPads.push({ x, z: 11, r: 20 });
+    const lot = meshOf(new THREE.BoxGeometry(W.goalX - W.startX + 60, 0.2, 40), 0x3f3f46);
+    lot.position.set(0, groundY(0, 10) + 0.1, 10);
+    levelGroup.add(lot);
+    if (S.goal) { levelGroup.remove(S.goal.mesh); levelGroup.remove(S.goal.marker); }
+    S.goal = buildGoal('parking', W.goalX, 24);
+    bus.banner('BEACH 256', 'there is no more sand. only the parking lot.');
+    toast('the Sun fills half the sky. it has been waiting for you.', 'bad');
+    S.setPieces = ['THE PARKING LOT'];
+    runner.reset();
+    S.levelTime = 0; S.streak = 0; S.goalHold = 0;
+    AU.jingleI = 0;
+    return;
+  }
 
   // ---- authored set pieces, dropped in before the loot so items can sit on them
   placeSetPieces(rng);

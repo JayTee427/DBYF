@@ -7,8 +7,10 @@ and what's left. Keep it current when things land.
 
 ## Where we are
 
-**v3.6** — sections A and B complete; C1, meta-progression, sun pressure and goal verbs done. Playable end to end. Third-person runner, endless escalating beaches,
-permanent roguelike builds, a living bird flock, arcade scoring.
+**v3.7** — **sections A, B and C are complete** (bar C3, cut by Jeff). Every
+mechanic in the design bible is now built. Playable end to end: third-person
+runner, endless escalating beaches, permanent roguelike builds, a living bird
+flock, arcade scoring.
 
 ### Built and working
 | System | State |
@@ -18,12 +20,12 @@ permanent roguelike builds, a living bird flock, arcade scoring.
 | Core verbs | run, sprint (stamina), hop (swaps lead foot, no burn mid-air), Shift+Space leap (~11m), **Scout** (hold Q) |
 | Beaches | **656m, ~2.3 min at a normal pace** (1.6 min flat out), 4 checkpoint cabanas splitting it into 5 legs |
 | SOLE TRAIN | combo for chaining fresh refuges without cooking a foot |
-| Goals (6) | ice cream truck, flip-flops, beach shower, umbrella camp, tide pools, rare **seal nursery** — each with its own model and audio beacon |
+| Goals (10) | ice cream truck, flip-flops, beach shower, umbrella camp, tide pools *(gated on low tide)*, parking lot, the orange Raptor, the buried hoard, **the boardwalk stairs**, rare **seal nursery** — each with its own model and audio beacon |
 | Weather (8) | clear, high noon, marine layer, golden hour, low tide, drizzle, **the wind**, **the humidity** |
-| Events (15) | cloud shade, whale wave, sun focus, sneaker wave, dolphin escort, sea lion pile, Sandcastle Kingdom, Kite Guy, grunion run, beach wedding, Metal Detector Man, volleyball, low tide reveal, seagull civil war, fisherman's backcast |
+| Events (18) | cloud shade, whale wave, sun focus, sneaker wave, dolphin escort, sea lion pile, Sandcastle Kingdom, Kite Guy, grunion run, beach wedding, Metal Detector Man, volleyball, low tide reveal, seagull civil war, fisherman's backcast, surf school, **dog + ball**, **plover nesting zone** |
 | Items (31) | permanent for the run, 3 slots (4 with shorts), auto-pickup with the ejected item dropping on the sand, 10 actives on [E], 8 synergies, cursed items, single-shoe items that protect one foot, **6-7** instant invincibility |
 | Birds (9) | gulls wheel overhead in a growing mob → peel off into telegraphed dives → **steal an item you can chase down**; Heermann's thief, plover broken-wing con, willet tripwires, least terns, pelican squadrons, vulture, falcon lock-on, bald eagle, and the Wash Prophet |
-| Arcade | Hall of Soles **persisted to `scores.json`**, 3-initial entry, podiatrist report card, 4 difficulties |
+| Arcade | Hall of Soles **persisted to `scores.json`**, 3-initial entry, podiatrist report card, 4 difficulties, **attract-mode ghost runner** burning to death on loop under the board |
 | Audio | soft master bus, volume slider, M mute, **N music**, persisted |
 | Music | `music.js` — a live-synthesized surf-rock score: walking bass, brushed drums, twangy pentatonic lead through a plate. Weather sets the mood (118bpm clear → 92 marine layer), your predicament sets the intensity. |
 
@@ -192,14 +194,66 @@ shoes held over her head, waving. You have ~26 seconds to reach her.
         running out toward the sea, with baking ground on both sides.
       - **THE TOWEL VILLAGE** — someone's entire extended family. Cool towels
         everywhere, and 45% of them have a crab in them.
-- [ ] **C2. Sun pressure** — the whole beach heats as the level runs, so dawdling
-      always loses and cutting a corner through lava becomes a real decision
-- [ ] **C3. Daily seed** + shareable beach codes ("beach #48213 nearly killed me")
-- [ ] **C4. Ultra level-256 kill screen** — all parking lot, no sand, the Sun fills half the sky
-- [ ] **C5. Attract mode ghost runner** burning to death under the score table
-- [ ] **C6. Boardwalk stairs** goal (the asphalt gauntlet) — the 7th goal, designed but unbuilt
+- [x] **C2. Sun pressure** *(v3.6)* — `sunPressure()` ramps the whole beach **+20%
+      over 150s then caps**, so dawdling always costs something. The sun sprite
+      visibly drops and swells, giving the mounting heat a cause you can see.
+- [ ] ~~**C3. Daily seed** + shareable beach codes~~ — **cut by Jeff.** The generator
+      is fully seeded, so this stays cheap if it's ever wanted.
+- [x] **C4. Level-256 kill screen** *(v3.7)* — reach beach 256 and the sand is gone.
+      A giant asphalt slab from end to end, hot pads tiled across the whole map,
+      weather forced to HIGH NOON, goal forced to the parking lot. Measured 23×
+      heat: it kills you almost instantly, which is the joke. Generation
+      early-returns, so no procedural refuge can save you.
+- [x] **C5. Attract-mode ghost runner** *(v3.7)* — a translucent silhouette jogs
+      across the title screen with its arms up for 9s, then collapses face-first
+      and smokes for 3.2s, on loop. Hidden the moment a run starts.
+- [x] **C6. Boardwalk stairs goal** *(v3.7)* — the asphalt gauntlet, and the
+      meanest goal in the game. A blacktop strip, five wooden steps, a deck with
+      railings and a lamp. `asphalt: true` pushes a hotPad right in front of the
+      steps (measured **1.47** vs 0.10 on open sand) — so the last twelve metres
+      of the beach are the hottest ground on it. *"wood. blessed, ordinary wood."*
+
+### Also landed in v3.7
+- [x] **Tide pools gated on the tide** — approach while the sea is in and the goal
+      refuses, showing 🪨 WAIT FOR THE TIDE…. You stand there cooking until the
+      water pulls back past z −12.5. Verified: blocked indefinitely at high tide,
+      completes 3.3s after it drops.
+- [x] **Dog + ball** — the last unbuilt background event. A dog tears after a
+      thrown ball at 8.5 m/s, tail going, and gets it re-thrown when it arrives.
+      Its paws leave a **trail of temporary cool sand** (r 3.2, 6s) — so the right
+      play is to follow the dog.
+- [x] **Plover nesting zone** — a roped rectangle with posts, rope and a sign,
+      containing deliciously cool sand. It is a trap. Step inside and attention
+      pins to **100**, you take guilt, and the banner reads GET OUT OF THE NEST.
+      Re-arms when you leave.
 
 ---
+
+---
+
+# WHAT'S STILL MISSING (as of v3.7)
+
+Every mechanic described in [DESIGN.md](DESIGN.md) is now built. What remains is
+either **cut by Jeff** or **new ideas that were never in the bible**:
+
+**Cut, on purpose**
+- Toe-dig (slows gameplay)
+- Colourblind / high-contrast lava mode
+- Daily seeds and shareable beach codes
+- Dignity currency, zinc-oxide war paint
+
+**Built but thinner than it could be**
+- **Onboarding** — seven tutorial toasts for 40 items, 18 events, 12 abilities and
+  9 birds. No pause screen (Esc) showing your build, no codex. *This is the
+  biggest remaining gap, and the only one a new player would actually feel.*
+- **Plover nesting zone** has no furious volunteer docent chasing you off.
+- **Weather never transitions mid-level** — the marine layer should burn off.
+
+**Never designed, just wanted**
+- Five more set pieces: lifeguard tower climb, volleyball court, storm drain,
+  rock jetty, bonfire pit. The chunk system makes each one function.
+- Report card naming your run ("The Sandal Incident").
+- Unlockable difficulty modifiers; a full item codex.
 
 ---
 
@@ -236,8 +290,8 @@ never withheld.
 *Note:* the first cut set that threshold at 4.5, below walking speed, which made
 the nursery literally unreachable. Caught by a bot run stalling. Any speed gate
 has to sit between 6.0 and 10.4.
-- [ ] still to do: **Boardwalk stairs** goal (the asphalt gauntlet), and tide
-      pools timed to low tide.
+- [x] *(v3.7)* **Boardwalk stairs** — the asphalt gauntlet. **Tide pools** now
+      genuinely wait on the tide.
 
 ## 4. ~~Sun pressure~~ — DONE in v3.6 (mild, Jeff's call)
 `sunPressure()` ramps heat **+20% over 150s then caps**, so dawdling always costs
@@ -259,11 +313,11 @@ The chunk system (v3.4) makes these cheap now — each is one function.
 - **The bonfire pit** — last night's fire, still hot. Rings of scorched sand.
 
 ## 7. Smaller polish worth doing
-- **Ghost runner in attract mode** (design bible) — replay the last death as a
-  silhouette burning to death under the score table.
-- **Level-256 kill screen** (design bible) — all parking lot, no sand.
-- **Dog + ball** — the one background event never built.
-- **Plover nesting zones** with the furious volunteer docent.
+- ~~Ghost runner in attract mode~~ — **done v3.7** (C5).
+- ~~Level-256 kill screen~~ — **done v3.7** (C4).
+- ~~Dog + ball~~ — **done v3.7**, with the cool paw-print trail.
+- ~~Plover nesting zones~~ — **done v3.7**. No docent yet: the rope, the sign and
+  the attention spike carry it. A furious volunteer who *chases* you is still open.
 - Report card could name your run: "The Sandal Incident", "Death by Pelican".
 - Weather could transition *mid-level* (marine layer burning off, as designed).
 

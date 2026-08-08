@@ -387,6 +387,7 @@ function startRun(diffKey) {
   D.title.classList.add('hidden'); D.end.classList.add('hidden');
   D.inter.classList.add('hidden'); D.pause.classList.add('hidden');
   D.hud.classList.remove('hidden');
+  if (ghost) ghost.visible = false;
   AU.ensure(); AU.resume(); tryLock();
   if (AU.ctx) { MUSIC.init(AU.ctx, AU.master); MUSIC.start(S.weather.key); }
   announce();
@@ -1003,7 +1004,17 @@ function simulate(dt) {
   D.goalLbl.textContent = (S.goalHold > 0 && gdef.hold)
     ? `${gdef.icon} ${gdef.verb}… ${(gdef.hold - S.goalHold).toFixed(1)}s`
     : `${gdef.icon} ${gdef.name}  ${Math.max(0, Math.round(gd))}m`;
-  if (gd < gdef.r) {
+  // the pools are only pools when the sea has gone out. wait for it.
+  const tideOut = waveZ < W.zMin + 4.5;
+  if (gdef.lowTide && gd < gdef.r + 6 && !tideOut) {
+    D.goalLbl.textContent = `${gdef.icon} WAIT FOR THE TIDE…`;
+    S.goalHold = 0;
+    if (S.t - (S.tideNag || 0) > 6) {
+      S.tideNag = S.t;
+      toast('\u{1F30A} the pools are under water — wait for it to pull out', 'warn');
+      say('come on. go out. go out.', false);
+    }
+  } else if (gd < gdef.r) {
     if (!gdef.hold) { levelComplete(); return; }
     if (gdef.quiet && runner.speed > gdef.quiet) {
       // you came barrelling in and the pups scattered
@@ -1173,6 +1184,64 @@ function updateHUD() {
 }
 
 // ---------------- attract mode ----------------
+// A ghost of your last death loops under the score table, jogging along and
+// then going down exactly where you did. Straight out of the arcade.
+let ghost = null, ghostT = 0;
+function buildGhost() {
+  const g = new THREE.Group();
+  const mat = () => new THREE.MeshBasicMaterial({
+    color: 0x2a1c2a, transparent: true, opacity: 0.32, depthWrite: false });
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.29, 0.34, 4, 8), mat());
+  torso.position.y = 1.06; g.add(torso);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 10, 8), mat());
+  head.position.y = 1.58; g.add(head);
+  const mk = (x) => {
+    const l = new THREE.Group(); l.position.set(x, 0.74, 0);
+    const s = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.36, 4, 6), mat());
+    s.position.y = -0.26; l.add(s); g.add(l); return l;
+  };
+  const legL = mk(-0.16), legR = mk(0.16);
+  const arm = (x) => {
+    const a = new THREE.Group(); a.position.set(x, 1.24, 0);
+    const s = new THREE.Mesh(new THREE.CapsuleGeometry(0.085, 0.36, 4, 6), mat());
+    s.position.y = -0.25; a.add(s); g.add(a); return a;
+  };
+  g.userData = { legL, legR, armL: arm(-0.34), armR: arm(0.34) };
+  scene.add(g);
+  return g;
+}
+function updateGhost(dt) {
+  if (!ghost) ghost = buildGhost();
+  ghost.visible = S.mode === 'title';
+  if (!ghost.visible) return;
+  const runFor = 9, downFor = 3.2;
+  ghostT = (ghostT + dt) % (runFor + downFor);
+  const dying = ghostT > runFor;
+  const gx = lerp(-60, 40, Math.min(1, ghostT / runFor));
+  const gz = 8 + Math.sin(ghostT * 0.5) * 4;
+  const u = ghost.userData;
+  if (!dying) {
+    const ph = ghostT * 11;
+    ghost.position.set(gx, groundY(gx, gz) + Math.abs(Math.sin(ph)) * 0.06, gz);
+    ghost.rotation.set(0, Math.PI / 2, 0);
+    u.legL.rotation.x = Math.sin(ph) * 0.8;
+    u.legR.rotation.x = -Math.sin(ph) * 0.8;
+    // the classic: arms up, already regretting it
+    u.armL.rotation.x = -1.4 - Math.sin(ph * 1.3) * 0.6;
+    u.armR.rotation.x = -1.4 + Math.sin(ph * 1.3) * 0.6;
+  } else {
+    const k = Math.min(1, (ghostT - runFor) / 0.5);
+    ghost.position.set(gx, groundY(gx, gz), gz);
+    ghost.rotation.set(k * 1.5, Math.PI / 2, 0);
+    u.legL.rotation.x = 0.4; u.legR.rotation.x = 0.25;
+    u.armL.rotation.x = -2.2; u.armR.rotation.x = -2.2;
+    if (Math.random() < dt * 8) {
+      particles.spawn(gx + (Math.random() - 0.5), groundY(gx, gz) + 0.4, gz + (Math.random() - 0.5),
+        { color: 0x888888, size: 0.36, ttl: 1.3, vy: 1.4, opacity: 0.35, grow: 2.4 });
+    }
+  }
+}
+
 function attract(t) {
   const a = t * 0.055;
   camera.fov = 62; camera.updateProjectionMatrix();
@@ -1218,6 +1287,7 @@ function loop() {
   } else if (S.mode === 'title') {
     attract(S.t);
     tickScoreboard(S.t);
+    updateGhost(dt);
   } else {
     updateCamera(dt);
   }

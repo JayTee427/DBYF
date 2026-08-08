@@ -55,7 +55,7 @@ export const S = {
   refuges: [], items: [], birds: [], props: [], fx: [], checkpoints: [],
   coolPads: [], hotPads: [], guilt: 0, prophet: null, readT: 0, windDir: 0,
   chests: [], crabs: [], mapFrags: 0, islandPending: false, keysUsed: false,
-  rescue: null, shoes: 0, setPieces: [], goalHold: 0,
+  rescue: null, shoes: 0, setPieces: [], goalHold: 0, killScreen: false,
   ev: null,
   tutorial: 0,
   lastVoice: 0, lastNag: 0, lastSqueak: 0,
