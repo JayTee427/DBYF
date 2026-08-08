@@ -58,6 +58,7 @@ const D = {
   ilTitle: $('ilTitle'), ilLines: $('ilLines'), ilNext: $('ilNext'),
   verdict: $('verdict'), epitaph: $('epitaph'), card: $('card'), finalScore: $('finalScore'),
   initials: $('initials'), cells: [$('c0'), $('c1'), $('c2')], hs: $('hsrows'),
+  hsPage: $('hsPage'),
 };
 
 // ---------------- toasts & score ----------------
@@ -534,15 +535,98 @@ function die() {
   AU.sad(); say('tell my shoes... I loved them.', true);
 }
 
-// ---------------- high scores ----------------
-const loadScores = () => { try { return JSON.parse(localStorage.getItem('dbyf_hs') || '[]'); } catch { return []; } };
-const saveScores = (v) => { try { localStorage.setItem('dbyf_hs', JSON.stringify(v)); } catch { } };
-function qualifies(sc) { if (sc <= 0) return false; const l = loadScores(); return l.length < 8 || sc > l[l.length - 1].sc; }
+// ============================================================
+// HALL OF SOLES — kept in scores.json on the server so initials outlive
+// browser wipes, new machines and every revision of the game. localStorage
+// is a mirror, used as the fallback on static hosting, and the two are
+// merged on load so a score is never lost either way.
+// ============================================================
+const MAX_SCORES = 25;
+let scoreCache = [];
+const localScores = () => { try { return JSON.parse(localStorage.getItem('dbyf_hs') || '[]'); } catch { return []; } };
+const mirrorLocal = (v) => { try { localStorage.setItem('dbyf_hs', JSON.stringify(v)); } catch { } };
+
+function mergeScores(a, b) {
+  const seen = new Set();
+  const all = [...a, ...b].filter(r => r && typeof r.sc === 'number');
+  const out = [];
+  for (const r of all.sort((x, y) => y.sc - x.sc)) {
+    const k = `${r.ini}|${r.sc}|${r.lv || 1}`;
+    if (seen.has(k)) continue;
+    seen.add(k); out.push(r);
+  }
+  return out.slice(0, MAX_SCORES);
+}
+async function fetchScores() {
+  let server = [];
+  try {
+    const r = await fetch('_scores', { cache: 'no-store' });
+    if (r.ok) server = await r.json();
+  } catch { /* static hosting: localStorage only */ }
+  scoreCache = mergeScores(server, localScores());
+  mirrorLocal(scoreCache);
+  renderScores();
+}
+async function pushScore(entry) {
+  scoreCache = mergeScores([entry], scoreCache);
+  mirrorLocal(scoreCache);
+  renderScores();
+  try {
+    const r = await fetch('_scores', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(entry),
+    });
+    if (r.ok) {                       // adopt the server's canonical table
+      scoreCache = mergeScores(await r.json(), scoreCache);
+      mirrorLocal(scoreCache);
+      renderScores();
+    }
+  } catch { /* offline — the mirror already has it */ }
+}
+const loadScores = () => scoreCache;
+function qualifies(sc) {
+  if (sc <= 0) return false;
+  return scoreCache.length < MAX_SCORES || sc > scoreCache[scoreCache.length - 1].sc;
+}
+
+// the attract table shows a page at a time and rotates through the whole hall
+const PAGE = 8;
+let hsPage = 0, hsPageAt = 0;
 function renderScores() {
-  const l = loadScores();
-  D.hs.innerHTML = l.length
-    ? l.map((r, i) => `<tr><td>${i + 1}.</td><td class="ini">${r.ini}</td><td class="sc">${r.sc}</td><td class="df">${r.df}</td><td class="lv">LV${r.lv || 1}</td></tr>`).join('')
-    : '<tr><td colspan="5" style="text-align:center;color:#a89070">no survivors yet. be the first.</td></tr>';
+  const l = scoreCache;
+  if (!l.length) {
+    D.hs.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#a89070">no survivors yet. be the first.</td></tr>';
+    if (D.hsPage) D.hsPage.textContent = '';
+    return;
+  }
+  const pages = Math.max(1, Math.ceil(l.length / PAGE));
+  hsPage %= pages;
+  const start = hsPage * PAGE;
+  const rows = l.slice(start, start + PAGE);
+  D.hs.innerHTML = rows.map((r, i) => {
+    const rank = start + i + 1;
+    const crown = rank === 1 ? ' \u{1F451}' : '';
+    return `<tr class="hsrow"><td>${rank}.</td><td class="ini">${r.ini}${crown}</td>` +
+           `<td class="sc">${r.sc}</td><td class="df">${r.df || ''}</td><td class="lv">LV${r.lv || 1}</td></tr>`;
+  }).join('');
+  if (D.hsPage) {
+    D.hsPage.textContent = pages > 1
+      ? `${l.length} SOULS  ·  ${hsPage + 1}/${pages}`
+      : `${l.length} SOUL${l.length === 1 ? '' : 'S'}`;
+  }
+}
+/** Cycle the hall while the title screen idles. */
+function tickScoreboard(t) {
+  if (S.mode !== 'title') return;
+  if (scoreCache.length <= PAGE) return;
+  if (t - hsPageAt < 4.5) return;
+  hsPageAt = t;
+  hsPage++;
+  renderScores();
+  D.hs.parentElement.style.animation = 'none';
+  void D.hs.parentElement.offsetWidth;
+  D.hs.parentElement.style.animation = 'hsflip .45s ease-out';
 }
 let initialsOn = false, iIdx = 0, iChars = ['A', 'A', 'A'];
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ';
@@ -566,11 +650,14 @@ function initialsKey(e) {
 }
 function commitInitials() {
   initialsOn = false;
-  const l = loadScores();
-  l.push({ ini: iChars.join(''), sc: S.score, df: S.diff.label.split(' ')[0], lv: S.level });
-  l.sort((a, b) => b.sc - a.sc); l.length = Math.min(l.length, 8);
-  saveScores(l);
-  D.initials.querySelector('p').textContent = '★ SAVED. THE SEALS SAW EVERYTHING. ★';
+  pushScore({
+    ini: iChars.join(''),
+    sc: S.score,
+    df: S.diff.label.split(' ')[0],
+    lv: S.level,
+    at: new Date().toISOString().slice(0, 10),
+  });
+  D.initials.querySelector('p').textContent = '★ SAVED TO THE HALL. THE SEALS SAW EVERYTHING. ★';
   renderInitials(); AU.fanfare();
 }
 
@@ -898,6 +985,7 @@ S.mode = 'title';
 generateLevel(runner);
 runner.root.visible = true;
 renderScores();
+fetchScores();          // pull the persisted hall from scores.json
 
 const clock = new THREE.Clock();
 let paintAcc = 0;
@@ -927,6 +1015,7 @@ function loop() {
     updateDying(dt);
   } else if (S.mode === 'title') {
     attract(S.t);
+    tickScoreboard(S.t);
   } else {
     updateCamera(dt);
   }
@@ -973,5 +1062,8 @@ window.DBYF = {
     return c.toDataURL('image/jpeg', q);
   },
   goto(x, z) { runner.x = x; runner.z = z; runner.y = groundY(x, z); },
+  scores: () => scoreCache,
+  refetchScores: fetchScores,
+  cycleScores() { hsPage++; renderScores(); },
   heatProbe: (x, z) => heatAt(x, z, S.t) * effHeat(),
 };

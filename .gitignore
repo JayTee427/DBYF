@@ -1,2 +1,6 @@
 _shots/
 __pycache__/
+scores.json.tmp
+
+# scores.json itself is deliberately TRACKED — the Hall of Soles is meant to
+# survive every revision of the game, so initials live in the repo.

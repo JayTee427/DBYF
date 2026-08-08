@@ -23,13 +23,17 @@ permanent roguelike builds, a living bird flock, arcade scoring.
 | Events (4) | cloud shade to chase, whale-breach wave surge, sun focus ring, sneaker wave |
 | Items (21) | permanent for the run, 3 FIFO slots, F to swap into a full build, 8 actives on [E], 8 synergies, 3 cursed, **6-7** instant invincibility |
 | Birds | gulls wheel overhead in a growing mob → peel off into telegraphed dives → **steal an item you can chase down**; Heermann's thief, plover broken-wing con, vulture, falcon lock-on, bald eagle |
-| Arcade | Hall of Soles, 3-initial entry, podiatrist report card, 4 difficulties |
+| Arcade | Hall of Soles **persisted to `scores.json`**, 3-initial entry, podiatrist report card, 4 difficulties |
 | Audio | soft master bus, volume slider, M to mute, persisted |
 
 ### Tooling worth remembering
 - `serve.py` accepts **POST /_shot** — the page posts a canvas dataURL, it lands in
   `_shots/*.jpg`. The only way to actually *see* renders when the browser pane
   won't composite.
+- `serve.py` also serves **GET/POST `/_scores`** backed by **`scores.json`** (tracked in
+  git on purpose). The client merges server + localStorage on boot, so scores survive
+  browser wipes, new machines and game revisions; on static hosting with no server it
+  degrades to localStorage automatically.
 - `DBYF.step(dt, visual=false)` runs headless sim ticks — used for bot balance runs.
 - `DBYF.heatProbe(x,z)` samples the effective heat field.
 - **Never tune difficulty against perfect-routing bots.** They made it far too hard
