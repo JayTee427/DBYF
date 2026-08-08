@@ -55,12 +55,19 @@ mediocre movement just produces more mediocre-feeling content.
   - [ ] jump buffering (press just before landing → it still fires) — *not done, hold-to-hop
         makes it mostly moot; revisit if it feels bad*
   - [ ] step-up onto low refuges instead of clipping — *not done; the y-damp hides it for now*
-- [ ] **A2. Physical comedy** — the design bible's "the comedy is in the physicality"
-  - stumble on a bad landing, faceplant, flailing recovery
-  - trip over sanderlings
-  - drop an item when a bird connects
-  - the sandal that flies off and sails away
-  - crab-pinch hop, the wedding-photo cringe
+- [x] **A2. Physical comedy** — *done in v2.4*
+  - [x] two-tier **trip system**: `stumble` (0.62s windmilling recovery, control cut to
+        35%, can't jump) and `faceplant` (1.5s — slam down, legs kicking, push back up)
+  - [x] triggers: hard landing (>0.86 impact → faceplant, >0.55 at speed → stumble),
+        tripping over sanderlings at a sprint, full-speed belly flop into the shore break,
+        gull peck → stumble, falcon hit → faceplant, towel crab launches you into the air
+  - [x] **faceplanting into lava sand costs extra health** and gets its own scream
+        ("MY FACE! MY FACE!") — going down face-first on a hot beach should hurt more
+  - [x] faceplants shake an item loose 70% of the time; it tumbles onto the sand as a
+        real pickup you can go back and grab
+  - [x] **the sandal that sails away** — ~15% chance on a leap, lands 11m off, retrievable
+  - [x] report card tracks Undignified stumbles / Full faceplants
+  - [ ] wedding-photo cringe — blocked on the beach wedding event (see B)
 - [ ] **A3. Juice** — hit-stop on impacts, richer particles, a real death animation
 
 ## B. Content gaps from the design bible

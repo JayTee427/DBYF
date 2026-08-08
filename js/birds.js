@@ -721,6 +721,18 @@ export function buildSanderlings() {
     sanderlings.push({ mesh: g, x: W.xMin + Math.random() * (W.xMax - W.xMin), off: Math.random() * 2.6, ph: Math.random() * 6.3 });
   }
 }
+/** Is there a sanderling underfoot? If so it panics and gets out of the way. */
+export function sanderlingNear(x, z, r) {
+  for (const s of sanderlings) {
+    const d = Math.hypot(s.mesh.position.x - x, s.mesh.position.z - z);
+    if (d < r) {
+      s.off = 2 + Math.random() * 2.5;          // scurry off, offended
+      s.x += (Math.random() - 0.5) * 8;
+      return true;
+    }
+  }
+  return false;
+}
 export function updateSanderlings(t, waveZ) {
   for (const s of sanderlings) {
     const z = waveZ + 0.9 + s.off + Math.sin(t * 3 + s.ph) * 0.35;
@@ -755,6 +767,7 @@ function resolveHit(b, runner, stats, radius, heavy) {
     S.health -= S.diff.birdDmg;
     runner.kx += (Math.random() - 0.5) * 15;
     runner.kz += (Math.random() - 0.5) * 15;
+    runner.trip('faceplant', '\u{1F985} FLATTENED BY A FALCON');
     if (S.slots.length) stealFrom(b, runner, true);
     else bus.toast('FALCON HIT! -' + S.diff.birdDmg + ' HP', 'bad');
     AU.thwack();
@@ -763,7 +776,7 @@ function resolveHit(b, runner, stats, radius, heavy) {
   } else {
     S.health -= S.diff.birdDmg;
     runner.kx += (Math.random() - 0.5) * 8; runner.kz += 4;
-    bus.toast('PECKED! -' + S.diff.birdDmg + ' HP', 'bad');
+    runner.trip('stumble', 'PECKED! -' + S.diff.birdDmg + ' HP');
     AU.thwack();
   }
 }

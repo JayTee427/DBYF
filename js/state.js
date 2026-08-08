@@ -66,6 +66,7 @@ export function freshStats() {
     items: 0, crabs: 0, punts: 0, maxL: 0, maxR: 0, maxState: 0,
     scouts: 0, waterTime: 0, leaps: 0, bestCombo: 0, cleanLevel: true, pacifist: true,
     raids: 0, thefts: 0, recovered: 0, conned: 0, scattered: 0,
+    trips: 0, faceplants: 0,
   };
 }
 

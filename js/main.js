@@ -12,7 +12,7 @@ import {
   paintSand, updateHaze, faceHaze, sunSprite, WEATHER,
 } from './world.js';
 import {
-  Runner, GOALS, generateLevel, updateEvents, checkCheckpoints,
+  Runner, GOALS, generateLevel, updateEvents, checkCheckpoints, dropItem,
   particles, prints, wire, levelGroup,
 } from './actors.js';
 import {
@@ -429,6 +429,8 @@ function die() {
     ['Robbed by seagulls', s.thefts],
     ['Loot chased down', s.recovered],
     ['Fell for the plover act', s.conned],
+    ['Undignified stumbles', s.trips],
+    ['Full faceplants', s.faceplants],
     ['Towel crabs met', s.crabs],
     ['Items beachcombed', s.items],
     ['Total time', S.runTime.toFixed(1) + 's'],
@@ -651,6 +653,12 @@ function simulate(dt) {
     it.ph += dt * 2.4;
     it.box.rotation.y = it.ph;
     it.box.position.y = 0.55 + Math.sin(it.ph) * 0.14;
+    if (it.tumble > 0) {                        // freshly knocked loose — settle it
+      it.tumble -= dt;
+      it.mesh.position.y = damp(it.mesh.position.y, groundY(it.x, it.z), 9, dt);
+      it.mesh.rotation.z = it.tumble * 4;
+      if (it.tumble <= 0) it.mesh.rotation.z = 0;
+    }
     const d = Math.hypot(runner.x - it.x, runner.z - it.z);
     if (d < 2.9) {
       // instant pickups don't need a slot, so they never make you choose
@@ -855,7 +863,7 @@ loop();
 window.DBYF = {
   S, runner, camera, cam, keys, input, renderer, scene, AU,
   ITEMS, SYNERGIES, buildStats, activeSynergies, grant, readyActive, flock,
-  spawnThief, spawnVulture, spawnFalcon, spawnEagle, scatterAt, useItem,
+  spawnThief, spawnVulture, spawnFalcon, spawnEagle, scatterAt, useItem, dropItem,
   levelComplete, die, nextLevel, generateLevel: () => generateLevel(runner),
   /** headless tick. `visual` does the expensive repaint; skip it for balance sims. */
   step(dt = 0.016, visual = true) {

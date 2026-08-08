@@ -9,8 +9,9 @@ import {
 import { S, W, HEAT, STAM, DIFFS, effHeat, effAggro, hasItem, footState } from './state.js';
 import { scene, groundY, heatAt, wetness, waveZ, waveEdgeAt, shadeAt, pickWeather, applyWeather, buildScenery, resetTide, rebuildTerrain, WEATHER } from './world.js';
 import { AU, say, OW } from './audio.js';
-import { ITEMS, rollItem, buildStats } from './items.js';
-import { clearFlock, spawnPlover, buildSanderlings } from './birds.js';
+import { ITEMS, rollItem, buildStats, removeItem } from './items.js';
+import { clearFlock, spawnPlover, buildSanderlings, sanderlingNear } from './birds.js';
+import { bus } from './bus.js';
 
 export const particles = new Particles(scene, 260);
 export const prints = new Footprints(scene, 64);
@@ -111,6 +112,7 @@ export class Runner {
     this.vaultT = 0; this.hopCool = 0; this.leapT = -99; this.airTime = 0;
     this.vx = 0; this.vz = 0; this.coyote = 0; this.skid = 0;
     this.landImpact = 0; this.jumpBuffer = 0;
+    this.stumbleT = 0; this.stumbleKind = null; this.stumbleMax = 1;
   }
 
   reset() {
@@ -119,6 +121,8 @@ export class Runner {
     this.grounded = true; this.phase = 0; this.speed = 0; this.refuge = null;
     this.hopCool = 0; this.airTime = 0;
     this.vx = 0; this.vz = 0; this.coyote = 0; this.skid = 0; this.landImpact = 0;
+    this.stumbleT = 0; this.stumbleKind = null;
+    this.root.rotation.set(0, this.facing, 0);
   }
 
   /** ground height here, including whatever you're standing on */
@@ -157,8 +161,12 @@ export class Runner {
 
     // ---- speed & stamina
     const inWater = this.z <= waveEdgeAt(this.x, S.t);
-    const wantSprint = input.sprint && S.stamina > 1 && mag > 0;
+    // while you're stumbling you are a passenger
+    this.stumbleT = Math.max(0, this.stumbleT - dt);
+    const downed = this.stumbleKind === 'faceplant' && this.stumbleT > this.stumbleMax * 0.45;
+    const wantSprint = input.sprint && S.stamina > 1 && mag > 0 && this.stumbleT <= 0;
     let base = wantSprint ? 10.4 : 6.0;
+    if (this.stumbleT > 0) base *= downed ? 0 : 0.35;
     if (inWater) base *= 0.55;
     if (S.heatState === 3) base *= 1.22;             // panic sprint
     if (S.heatState === 4) base *= 1.32;
@@ -224,7 +232,7 @@ export class Runner {
     // coyote time: a fraction of a second of grace after a refuge edge, so
     // running off a plank and jumping late still works like you meant it to
     if (this.grounded) this.coyote = 0.13; else this.coyote -= dt;
-    if ((this.grounded || this.coyote > 0) && input.jump && this.hopCool <= 0) {
+    if ((this.grounded || this.coyote > 0) && input.jump && this.hopCool <= 0 && this.stumbleT <= 0) {
       // A sprinting jump is a LEAP: long, costly, and the only way over a
       // wide scorch band. A standing tap is a quick hop that swaps your lead
       // foot — the one bit of direct control over the per-foot gauges.
@@ -235,6 +243,16 @@ export class Runner {
         S.stamina = clamp(S.stamina - 16, 0, STAM.max);
         this.leapT = S.t; S.stats.leaps++;
         AU.sweep(300, 620, 0.22, 'triangle', 0.13);
+        // a big leap is exactly how you lose a sandal
+        const sandal = S.slots.find(s => s.key === 'sandals');
+        if (sandal && Math.random() < 0.14) {
+          removeItem(sandal);
+          const a = this.facing + (Math.random() - 0.5);
+          dropItem('sandals', this.x + Math.sin(a) * 11, this.z + Math.cos(a) * 11);
+          toast('\u{1FA74} YOUR SANDAL! it went THAT way', 'bad');
+          say('no! my sandal!', true);
+          AU.sweep(700, 1400, 0.5, 'sine', 0.07);
+        }
       } else {
         this.vy = 5.4; AU.hop();
       }
@@ -261,14 +279,32 @@ export class Runner {
           { color: inWater ? 0xcfefff : 0xf0dcae, size: 0.26 + impact * 0.25,
             ttl: 0.5 + impact * 0.3, vy: 0.8 + impact * 1.6, spread: 1.1 + impact * 1.8 });
         if (ref && !wasGrounded) this.onRefugeLand(ref);
+        // come down too fast and too fast-moving and you do not stick it
+        const horiz = Math.hypot(this.vx, this.vz);
+        if (impact > 0.86 && !ref) this.trip('faceplant', 'BAD LANDING');
+        else if (impact > 0.55 && horiz > 6.5 && !ref) this.trip('stumble');
       }
     } else this.y = damp(this.y, gy, 22, dt);
 
+    // ---- the little birds are a genuine tripping hazard
+    if (this.grounded && this.speed > 7 && this.stumbleT <= 0) {
+      if (sanderlingNear(this.x, this.z, 1.5)) {
+        this.trip('stumble', '\u{1F426} TRIPPED OVER A SANDERLING');
+        AU.gullCall();
+      }
+    }
+    // and belly-flopping into the shore break at full tilt is a classic
+    if (this.grounded && inWater && this.speed > 9 && this.stumbleT <= 0 && Math.random() < dt * 2.2) {
+      this.trip('faceplant', '\u{1F30A} FULL-SPEED BELLY FLOP');
+      AU.splash(true);
+    }
+
     // ---- facing & animation
-    if (mag > 0) this.facing = angleLerp(this.facing, Math.atan2(wishX, wishZ), 1 - Math.exp(-16 * dt));
+    if (mag > 0 && this.stumbleT <= 0) this.facing = angleLerp(this.facing, Math.atan2(wishX, wishZ), 1 - Math.exp(-16 * dt));
     this.root.position.set(this.x, this.y, this.z);
     this.root.rotation.y = this.facing;
-    this.animate(dt, mag > 0, inWater);
+    this.animate(dt, mag > 0 && this.stumbleT <= 0, inWater);
+    this.animateStumble(dt);
 
     // ---- footsteps
     if (this.grounded && mag > 0) {
@@ -278,6 +314,52 @@ export class Runner {
     } else if (!this.grounded) this.phase += dt * 2;
 
     return { inWater, refuge: this.refuge, groundYHere: gy };
+  }
+
+  /**
+   * Lose your dignity. `kind` is 'stumble' (a staggering windmill recovery)
+   * or 'faceplant' (down in the sand, briefly, face-first).
+   */
+  trip(kind, reason) {
+    if (this.stumbleT > 0 || S.invuln > 0) return;
+    this.stumbleKind = kind;
+    this.stumbleT = kind === 'faceplant' ? 1.5 : 0.62;
+    this.stumbleMax = this.stumbleT;
+    S.stats.trips++;
+    const gy = groundY(this.x, this.z);
+    if (kind === 'faceplant') {
+      S.stats.faceplants++;
+      this.vx *= 0.15; this.vz *= 0.15;
+      AU.land(true); AU.noise(0.3, 500, 0.12);
+      bus.shake(1);
+      particles.burst(this.x, gy + 0.15, this.z, 16,
+        { color: 0xefdcb0, size: 0.38, ttl: 0.8, vy: 1.4, spread: 2.6 });
+      // going face-first into scorching sand is, of course, much worse
+      const h = heatAt(this.x, this.z, S.t) * effHeat();
+      if (h > HEAT.safe && !this.refuge) {
+        S.health -= 6;
+        toast('\u{1F975} FACE-FIRST INTO THE HOT SAND', 'bad');
+        say(['MY FACE! MY FACE!', 'not the face! not the face!', 'why is my face on fire'][Math.floor(Math.random() * 3)], true);
+      } else {
+        toast(reason || 'FACEPLANT', 'warn');
+        say(['oof.', 'I meant to do that.', 'ow. my everything.'][Math.floor(Math.random() * 3)], true);
+      }
+      // something shakes loose
+      if (S.slots.length && Math.random() < 0.7) {
+        const lost = S.slots[Math.floor(Math.random() * S.slots.length)];
+        removeItem(lost);
+        dropItem(lost.key, this.x + (Math.random() - 0.5) * 4, this.z + (Math.random() - 0.5) * 4);
+        toast('\u{1F4A5} dropped your ' + lost.def.name + '!', 'bad');
+      }
+    } else {
+      this.vx *= 0.62; this.vz *= 0.62;
+      AU.noise(0.16, 700, 0.07);
+      bus.shake(0.4);
+      particles.burst(this.x, gy + 0.1, this.z, 6,
+        { color: 0xefdcb0, size: 0.28, ttl: 0.5, vy: 1.0, spread: 1.6 });
+      if (reason) toast(reason, 'warn');
+      say(['whoa!', 'woah — WOAH', 'nope nope nope', 'aaah!'][Math.floor(Math.random() * 4)], false);
+    }
   }
 
   onRefugeLand(ref) {
@@ -300,9 +382,13 @@ export class Runner {
     }
     if (ref.type === 'towel' && ref.crab && !ref.crabSprung) {
       ref.crabSprung = true; S.stats.crabs++;
-      S.health -= 6; this.kx += (Math.random() - 0.5) * 8; this.kz += 5;
+      S.health -= 6;
+      // launched straight off the towel, arms everywhere
+      this.vy = 4.2; this.grounded = false;
+      const a = Math.random() * Math.PI * 2;
+      this.kx += Math.sin(a) * 9; this.kz += Math.cos(a) * 9;
+      this.trip('stumble', '\u{1F980} THERE WAS A CRAB IN THE TOWEL');
       AU.crab(); say('CRAB! CRAB! CRAB!', true);
-      toast('\u{1F980} THERE WAS A CRAB IN THE TOWEL', 'bad');
       particles.burst(this.x, this.y + 0.3, this.z, 10, { color: 0xff6a4a, size: 0.32, ttl: 0.7, spread: 2.2 });
     }
   }
@@ -325,6 +411,46 @@ export class Runner {
       particles.burst(fx, gy + 0.04, fz, 2, { color: 0xefdcb0, size: 0.22, ttl: 0.4, vy: 0.7, spread: 0.6 });
     }
     if (inWater) particles.burst(fx, gy + 0.05, fz, 4, { color: 0xd8f4ff, size: 0.26, ttl: 0.45, vy: 1.5, spread: 1.1 });
+  }
+
+  /** Overrides the normal pose while you're losing your dignity. */
+  animateStumble(dt) {
+    if (this.stumbleT <= 0) {
+      this.root.rotation.x = damp(this.root.rotation.x, 0, 12, dt);
+      this.root.rotation.z = damp(this.root.rotation.z, 0, 12, dt);
+      return;
+    }
+    const k = 1 - this.stumbleT / this.stumbleMax;      // 0 → 1 through the recovery
+    if (this.stumbleKind === 'faceplant') {
+      // slam down face-first, lie there a beat, then push yourself back up
+      const down = k < 0.18 ? k / 0.18 : k < 0.62 ? 1 : 1 - (k - 0.62) / 0.38;
+      this.root.rotation.x = down * 1.5;
+      this.rig.position.y = -down * 0.55;
+      const flail = k < 0.2 ? 1 : 0;
+      this.armL.rotation.x = -2.2 * down - flail * 0.6;
+      this.armR.rotation.x = -2.2 * down - flail * 0.6;
+      this.armL.rotation.z = 0.7 * down; this.armR.rotation.z = -0.7 * down;
+      this.legL.rotation.x = 0.5 * down; this.legR.rotation.x = 0.35 * down;
+      this.headG.rotation.x = -0.5 * down;
+      // legs kick a bit while you're down there
+      if (k > 0.2 && k < 0.6) {
+        this.legL.rotation.x += Math.sin(S.t * 16) * 0.25;
+        this.legR.rotation.x -= Math.sin(S.t * 16) * 0.25;
+      }
+    } else {
+      // windmill: arms cartwheeling, body pitched forward, knees everywhere
+      const w = Math.sin(S.t * 26), w2 = Math.cos(S.t * 26);
+      const amt = Math.sin((1 - k) * Math.PI * 0.9);
+      this.root.rotation.x = amt * 0.5;
+      this.root.rotation.z = w2 * amt * 0.22;
+      this.armL.rotation.x = -1.2 + w * 2.6 * amt;
+      this.armR.rotation.x = -1.2 - w * 2.6 * amt;
+      this.armL.rotation.z = 0.6 * amt; this.armR.rotation.z = -0.6 * amt;
+      this.legL.rotation.x = w2 * 0.8 * amt;
+      this.legR.rotation.x = -w2 * 0.8 * amt;
+      this.headG.rotation.z = -w * 0.3 * amt;
+      this.mouth.scale.y = 1 + amt * 2.5;
+    }
   }
 
   animate(dt, moving, inWater) {
@@ -457,6 +583,19 @@ function buildItemPickup(key, x, z) {
   g.position.set(x, groundY(x, z), z);
   levelGroup.add(g);
   return { key, x, z, mesh: g, box, taken: false, ph: Math.random() * 6.3 };
+}
+
+/** Knock something loose onto the sand — it tumbles, then you can grab it back. */
+export function dropItem(key, x, z) {
+  const cx = clamp(x, W.xMin + 2, W.xMax - 2);
+  const cz = clamp(z, W.zMin, W.zMax - 2);
+  const it = buildItemPickup(key, cx, cz);
+  it.tumble = 0.7;
+  it.mesh.position.y += 1.2;
+  S.items.push(it);
+  particles.burst(cx, groundY(cx, cz) + 0.8, cz, 7,
+    { color: 0xffd0a0, size: 0.28, ttl: 0.5, spread: 1.8 });
+  return it;
 }
 
 // ============================================================
