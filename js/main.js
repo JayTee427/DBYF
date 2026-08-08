@@ -541,7 +541,7 @@ function die() {
 // is a mirror, used as the fallback on static hosting, and the two are
 // merged on load so a score is never lost either way.
 // ============================================================
-const MAX_SCORES = 25;
+const MAX_SCORES = 100;
 let scoreCache = [];
 const localScores = () => { try { return JSON.parse(localStorage.getItem('dbyf_hs') || '[]'); } catch { return []; } };
 const mirrorLocal = (v) => { try { localStorage.setItem('dbyf_hs', JSON.stringify(v)); } catch { } };
@@ -590,13 +590,13 @@ function qualifies(sc) {
   return scoreCache.length < MAX_SCORES || sc > scoreCache[scoreCache.length - 1].sc;
 }
 
-// the attract table shows a page at a time and rotates through the whole hall
-const PAGE = 8;
+// the attract board shows a dozen at a time and scrolls through the whole hall
+const PAGE = 12;
 let hsPage = 0, hsPageAt = 0;
 function renderScores() {
   const l = scoreCache;
   if (!l.length) {
-    D.hs.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#a89070">no survivors yet. be the first.</td></tr>';
+    D.hs.innerHTML = '<div class="empty">no survivors yet. be the first.</div>';
     if (D.hsPage) D.hsPage.textContent = '';
     return;
   }
@@ -607,12 +607,17 @@ function renderScores() {
   D.hs.innerHTML = rows.map((r, i) => {
     const rank = start + i + 1;
     const crown = rank === 1 ? ' \u{1F451}' : '';
-    return `<tr class="hsrow"><td>${rank}.</td><td class="ini">${r.ini}${crown}</td>` +
-           `<td class="sc">${r.sc}</td><td class="df">${r.df || ''}</td><td class="lv">LV${r.lv || 1}</td></tr>`;
+    return `<div class="hsrow${rank <= 3 ? ' top' : ''}">` +
+      `<span class="rk">${rank}.</span>` +
+      `<span class="ini">${r.ini}${crown}</span>` +
+      `<span class="sc">${r.sc.toLocaleString()}</span>` +
+      `<span class="df">${r.df || ''}</span>` +
+      `<span class="lv">LV${r.lv || 1}</span></div>`;
   }).join('');
   if (D.hsPage) {
+    const shown = `${start + 1}–${start + rows.length}`;
     D.hsPage.textContent = pages > 1
-      ? `${l.length} SOULS  ·  ${hsPage + 1}/${pages}`
+      ? `${l.length} SOULS  ·  SHOWING ${shown}  ·  PAGE ${hsPage + 1}/${pages}`
       : `${l.length} SOUL${l.length === 1 ? '' : 'S'}`;
   }
 }

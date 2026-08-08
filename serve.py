@@ -17,7 +17,7 @@ import threading
 PORT = 8123
 SHOT_DIR = '_shots'
 SCORES_FILE = 'scores.json'
-MAX_SCORES = 25
+MAX_SCORES = 100
 
 _lock = threading.Lock()
 
@@ -122,5 +122,5 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 if __name__ == '__main__':
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     print('DBYF server: http://localhost:%d' % PORT)
-    print('  Hall of Soles -> %s (%d entries kept)' % (SCORES_FILE, MAX_SCORES))
+    print('  Hall of Soles -> %s (last %d kept)' % (SCORES_FILE, MAX_SCORES))
     http.server.ThreadingHTTPServer(('', PORT), Handler).serve_forever()

@@ -44,14 +44,20 @@
   .diffbtn.ultra:hover{background:#4d1000}
 
   .panel{background:var(--panel);border:3px solid var(--line);border-radius:4px;padding:12px 20px}
-  #hstable{min-width:390px}
+  #hstable{min-width:min(430px,94vw)}
   #hstable h3{font-size:12px;letter-spacing:.28em;color:#ffe9bf;margin-bottom:8px}
-  #hstable table{width:100%;border-collapse:collapse;font-family:Consolas,monospace;font-size:14px}
-  #hstable td{padding:2px 7px;color:var(--sand)}
-  #hstable td.ini{color:#fff;letter-spacing:.16em}
-  #hstable td.sc{text-align:right;color:#fff}
-  #hstable td.df{color:#ff9d66;font-size:10.5px}
-  #hstable td.lv{color:var(--cool);font-size:10.5px}
+  /* a dozen at a time, scrolling through the whole hall */
+  #hsrows{display:grid;grid-template-columns:1fr;gap:0;
+    font-family:Consolas,monospace;font-size:13px}
+  #hsrows .hsrow{display:grid;grid-template-columns:2.4em 3.6em 1fr 4.6em 3.2em;
+    gap:6px;align-items:baseline;padding:1px 0;color:var(--sand)}
+  #hsrows .hsrow .rk{color:#b9a486;text-align:right}
+  #hsrows .hsrow .ini{color:#fff;letter-spacing:.12em}
+  #hsrows .hsrow .sc{text-align:right;color:#fff}
+  #hsrows .hsrow .df{color:#ff9d66;font-size:9.5px}
+  #hsrows .hsrow .lv{color:var(--cool);font-size:9.5px;text-align:right}
+  #hsrows .hsrow.top{background:rgba(255,217,74,.13);border-radius:3px}
+  #hsrows .empty{grid-column:1/-1;text-align:center;color:#a89070;padding:6px 0}
   #hsPage{margin-top:7px;font-family:Consolas,monospace;font-size:10px;letter-spacing:.2em;
     color:#b9a486;text-align:center}
   @keyframes hsflip{0%{opacity:0;transform:translateY(7px)}100%{opacity:1;transform:translateY(0)}}
@@ -218,7 +224,7 @@
 
   <div id="hstable" class="panel">
     <h3>★ HALL OF SOLES ★</h3>
-    <table><tbody id="hsrows"></tbody></table>
+    <div id="hsrows"></div>
     <div id="hsPage"></div>
   </div>
 
@@ -316,6 +322,6 @@
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js" } }
 </script>
-<script type="module" src="js/main.js?v=2.7.0"></script>
+<script type="module" src="js/main.js?v=2.7.1"></script>
 </body>
 </html>
