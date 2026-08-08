@@ -3,7 +3,7 @@
 // ============================================================
 import * as THREE from 'three';
 import { clamp, lerp, smoothstep, noise2, fbm, toon, meshOf, faceSprite, mulberry32 } from './engine.js';
-import { S, W, effHeat } from './state.js';
+import { S, W, effHeat, hasItem } from './state.js';
 
 // ---------------- weather characters ----------------
 export const WEATHER = {
@@ -65,7 +65,10 @@ const WET0 = -18, WET_ROWS = 34;
 const wetAt = new Float32Array(WET_ROWS).fill(-999);
 export function waveLine(t) {
   const s = (Math.sin(t * 0.42) * 0.62 + Math.sin(t * 0.26 + 2.1) * 0.38 + 1) / 2;
-  return W.zMin + 13 * Math.pow(s, 1.5) + (S.weather ? S.weather.wash : 0) + (S.ev ? S.ev.surge : 0);
+  // the glass float: the sea genuinely reaches further up the beach for you
+  const favour = hasItem('float') ? 3.6 : 0;
+  return W.zMin + 13 * Math.pow(s, 1.5) + (S.weather ? S.weather.wash : 0)
+       + (S.ev ? S.ev.surge : 0) + favour;
 }
 export function updateTide(t) {
   waveZ = waveLine(t);

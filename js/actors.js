@@ -863,8 +863,11 @@ export function fireEvent(kind, runner) {
     ev.whale = { mesh: m, t: 0 };
     toast('\u{1F40B} WHALE!'); AU.splash(true); say('whoa!', false);
   } else if (kind === 'focus') {
-    const x = clamp(runner.x + 14 + Math.random() * 10, W.xMin, W.xMax);
-    const z = clamp(runner.z + (Math.random() - 0.5) * 10, 0, 22);
+    // cursed? it leads you properly, right where you're going
+    const cursed = buildStats().sunFocus > 1;
+    const lead = cursed ? runner.speed * 1.1 : 0;
+    const x = clamp(runner.x + (cursed ? 6 : 14) + Math.random() * 10 + Math.sin(runner.facing) * lead, W.xMin, W.xMax);
+    const z = clamp(runner.z + (Math.random() - 0.5) * (cursed ? 5 : 10) + Math.cos(runner.facing) * lead, 0, 22);
     const ring = new THREE.Mesh(new THREE.RingGeometry(6.4, 8.0, 26),
       new THREE.MeshBasicMaterial({ color: 0xff2200, transparent: true, opacity: 0.6, side: THREE.DoubleSide }));
     ring.rotation.x = -Math.PI / 2; ring.position.set(x, groundY(x, z) + 0.08, z); scene.add(ring);
@@ -1112,10 +1115,12 @@ export function updateEvents(dt, runner) {
   updateRescue(dt, runner);
 
   if (S.t >= ev.nextAt) {
+    // the cursed sand dollar: the Sun takes it personally
+    const sunBias = buildStats().sunFocus;
     const pool = [['cloud', 22], ['whale', 15], ['dolphins', 17], ['sealions', 15],
                   ['sandcastle', 15], ['kite', 12], ['detector', 14], ['volleyball', 14],
                   ['dustdevil', 13], ['surfschool', 11]];
-    if (S.level >= 2) pool.push(['focus', 18], ['sneaker', 14], ['wedding', 11], ['fisherman', 12]);
+    if (S.level >= 2) pool.push(['focus', 18 * sunBias], ['sneaker', 14], ['wedding', 11], ['fisherman', 12]);
     if (S.level >= 3) pool.push(['grunion', 8], ['lowtide', 12], ['civilwar', 10]);
     // Rare, and gated hard: level 3+, feet genuinely in trouble, and only once
     // you're past the halfway mark — so the truck at the top of the beach is a

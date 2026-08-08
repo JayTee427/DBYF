@@ -54,6 +54,7 @@ const D = {
   slots: [$('s0'), $('s1'), $('s2')],
   state: $('heatstate'), toasts: $('toasts'), vig: $('vignette'), flash: $('flash'),
   arrow: $('arrow'), scoutHint: $('scoutHint'), combo: $('combo'),
+  warn: $('warnWrap'),
   banner: $('banner'), ability: $('ability'), swapHint: $('swapHint'), syn: $('syn'),
   invuln: $('invuln'),
   ilTitle: $('ilTitle'), ilLines: $('ilLines'), ilNext: $('ilNext'),
@@ -897,6 +898,13 @@ function simulate(dt) {
     it.ph += dt * 2.4;
     it.box.rotation.y = it.ph;
     it.box.position.y = 0.55 + Math.sin(it.ph) * 0.14;
+    // lantern: cursed pickups visibly glow before you're anywhere near them
+    if (build.identify && ITEMS[it.key].cursed && !it.lit) {
+      it.lit = true;
+      it.box.material.color.setHex(0xc86bff);
+      it.box.material.emissive?.setHex(0x5a1f8a);
+      if (it.mesh.children[2]) it.mesh.children[2].material.color.setHex(0xc86bff);
+    }
     if (it.tumble > 0) {                        // freshly knocked loose — settle it
       it.tumble -= dt;
       it.mesh.position.y = damp(it.mesh.position.y, groundY(it.x, it.z), 9, dt);
@@ -981,6 +989,7 @@ function updateCamera(dt) {
 
 // ---------------- HUD ----------------
 function updateHUD() {
+  const build = buildStats();
   D.lfoot.style.width = S.feet.L + '%';
   D.rfoot.style.width = S.feet.R + '%';
   D.lfootT.textContent = HEAT_NAMES[footState(S.feet.L)];
@@ -996,6 +1005,18 @@ function updateHUD() {
   D.lvl.textContent = 'LV ' + S.level + '  —  BEACH #' + S.seed;
   D.weather.textContent = S.weather.name;
   D.scoutHint.classList.toggle('hidden', S.mode === 'scout' || S.level > 1);
+  // the GoPro: it sees what's lining you up before you do
+  if (build.warn) {
+    const threat = flock.find(b =>
+      b.state === 'peel' || b.state === 'dive' || b.state === 'lock' ||
+      b.state === 'stoop' || b.state === 'snatch');
+    if (threat) {
+      D.warn.classList.remove('hidden');
+      const a = Math.atan2(threat.x - runner.x, threat.z - runner.z) - cam.yaw;
+      D.warn.style.transform = `rotate(${-a + Math.PI}rad)`;
+    } else D.warn.classList.add('hidden');
+  } else D.warn.classList.add('hidden');
+
   if (S.invuln > 0) {
     D.invuln.classList.remove('hidden');
     D.invuln.textContent = '6 — 7   ' + S.invuln.toFixed(1) + 's';
@@ -1009,9 +1030,27 @@ function updateHUD() {
     D.combo.style.fontSize = Math.min(15 + S.combo * 1.6, 34) + 'px';
   } else D.combo.classList.add('hidden');
 
-  // goal arrow
+  // goal arrow. The cursed compass still points at the goal — just via the
+  // single worst line available. It is not wrong. It is mean.
   const dx = S.goal.x - runner.x, dz = S.goal.z - runner.z;
-  const ang = Math.atan2(dx, dz) - cam.yaw;
+  let bearing = Math.atan2(dx, dz);
+  if (hasIt('compass')) {
+    let worst = -1, worstAng = bearing;
+    for (let a = -1.15; a <= 1.15; a += 0.23) {
+      const test = bearing + a;
+      let heat = 0;
+      for (let d = 6; d <= 26; d += 5) {
+        heat += Math.max(0, heatAt(runner.x + Math.sin(test) * d,
+                                   runner.z + Math.cos(test) * d, S.t));
+      }
+      if (heat > worst) { worst = heat; worstAng = test; }
+    }
+    bearing = worstAng;
+    D.arrow.style.color = '#c86bff';
+  } else {
+    D.arrow.style.color = '';
+  }
+  const ang = bearing - cam.yaw;
   D.arrow.style.transform = `rotate(${-ang + Math.PI}rad)`;
 
   D.slots.forEach((el, i) => {
@@ -1039,8 +1078,11 @@ function updateHUD() {
   // heads-up while you're still approaching, so a full build is a choice
   if (nearItem && S.slots.length) {
     const d = ITEMS[nearItem.it.key];
+    // the lantern reads the thing before you touch it
+    const cursedWarning = (build.identify && d.cursed)
+      ? '<br><b style="color:#c86bff">\u{1F3EE} THE LANTERN FLARES — THIS ONE IS CURSED</b>' : '';
     D.swapHint.classList.remove('hidden');
-    D.swapHint.innerHTML = `${d.icon} <b>${d.name}</b> — ${d.desc}<br>` +
+    D.swapHint.innerHTML = `${d.icon} <b>${d.name}</b> — ${d.desc}${cursedWarning}<br>` +
       `<i>taking it drops ${S.slots[0].def.icon} ${S.slots[0].def.name} on the sand</i>`;
   } else D.swapHint.classList.add('hidden');
 

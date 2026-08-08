@@ -142,6 +142,12 @@
   #arrowWrap{position:absolute;top:52px;left:50%;transform:translateX(-50%);width:38px;height:38px;opacity:.9}
   #arrow{width:100%;height:100%;font-size:30px;line-height:38px;text-align:center;color:var(--gold);
     text-shadow:0 0 10px rgba(0,0,0,.8)}
+  /* the GoPro's threat warning — points at whatever is lining you up */
+  #warnWrap{position:absolute;top:52px;left:calc(50% + 52px);width:38px;height:38px}
+  #warn{width:100%;height:100%;font-size:28px;line-height:38px;text-align:center;color:#ff4d3d;
+    text-shadow:0 0 12px rgba(255,60,0,.9),0 0 3px rgba(0,0,0,.9);animation:warnpulse .4s infinite alternate}
+  @keyframes warnpulse{from{transform:scale(1);opacity:.75}to{transform:scale(1.22);opacity:1}}
+
   #scoutHint{position:absolute;top:96px;left:50%;transform:translateX(-50%);
     font-family:Consolas,monospace;font-size:12px;color:var(--cool);letter-spacing:.12em;
     background:var(--panel);border:2px solid var(--cool);border-radius:3px;padding:4px 12px;opacity:.9}
@@ -253,6 +259,7 @@
   </div>
 
   <div id="arrowWrap"><div id="arrow">▲</div></div>
+  <div id="warnWrap" class="hidden"><div id="warn">▲</div></div>
   <div id="scoutHint">HOLD <b>Q</b> TO SCOUT THE BEACH</div>
 
   <div class="gauges">
@@ -322,6 +329,6 @@
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js" } }
 </script>
-<script type="module" src="js/main.js?v=3.1.0"></script>
+<script type="module" src="js/main.js?v=3.2.0"></script>
 </body>
 </html>

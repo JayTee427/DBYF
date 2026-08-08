@@ -191,8 +191,18 @@ shoes held over her head, waving. You have ~26 seconds to reach her.
 
 ---
 
+## Audit note (v3.2)
+An audit against the design bible found **five items wired into the game that
+did nothing** — the descriptions and passive flags existed but were never
+consumed by the simulation. All fixed and verified:
+glass float, cursed compass, lost GoPro, rusty lantern, and the Sun-focus
+half of the cursed sand dollar. Two of them were *chest rewards*, so a player
+detoured into the dunes for a placebo. Worth re-running this kind of audit
+(`grep` each `passive:` flag for a consumer) after any big content batch.
+
 ## Deferred by Jeff (revisit later)
 - Toe-dig (cut: slows gameplay)
+- Colourblind / high-contrast lava mode (cut by Jeff)
 - Dignity currency
 - Zinc-oxide war paint cosmetics
 
