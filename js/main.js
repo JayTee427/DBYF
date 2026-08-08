@@ -28,6 +28,7 @@ import {
 import { wireBus } from './bus.js';
 import { AU, say, OW } from './audio.js';
 import { MUSIC } from './music.js';
+import { PROFILE, UNLOCKS, STARTING_ITEMS } from './profile.js';
 
 // ---------------- renderer & camera ----------------
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -61,7 +62,7 @@ const D = {
   ilTitle: $('ilTitle'), ilLines: $('ilLines'), ilNext: $('ilNext'),
   verdict: $('verdict'), epitaph: $('epitaph'), card: $('card'), finalScore: $('finalScore'),
   initials: $('initials'), cells: [$('c0'), $('c1'), $('c2')], hs: $('hsrows'),
-  hsPage: $('hsPage'),
+  hsPage: $('hsPage'), career: $('career'),
 };
 
 // ---------------- toasts & score ----------------
@@ -414,7 +415,7 @@ $('btnTitle').addEventListener('click', () => {
   D.end.classList.add('hidden'); D.hud.classList.add('hidden');
   D.title.classList.remove('hidden'); S.mode = 'title';
   if (AU.ctx) { MUSIC.init(AU.ctx, AU.master); MUSIC.start('title'); }
-  renderScores(); document.exitPointerLock?.();
+  renderScores(); renderCareer(); document.exitPointerLock?.();
 });
 
 // ---------------- level complete ----------------
@@ -522,6 +523,9 @@ function updateDying(dt) {
 function die() {
   S.mode = 'dead';
   S.hitStop = 0;
+  // the only thing that outlives the run
+  PROFILE.absorb(S.stats, S.level, S.score, true);
+  const fresh = PROFILE.claim();
   document.exitPointerLock?.();
   const s = S.stats;
   const consolation = Math.round((runner.x - W.startX) * 3 * S.diff.mult);
@@ -565,7 +569,19 @@ function die() {
     + `<div class="row bonus"><span>DISTANCE CONSOLATION</span><span>+${consolation}</span></div>`
     + `<div class="row" style="margin-top:6px;border-top:2px solid var(--line);padding-top:6px">
          <span>FINAL BUILD</span><span style="max-width:16em;text-align:right">${buildLine}</span></div>`
-    + (syn ? `<div class="row bonus"><span>SYNERGIES</span><span>${syn}</span></div>` : '');
+    + (syn ? `<div class="row bonus"><span>SYNERGIES</span><span>${syn}</span></div>` : '')
+    + (fresh.length
+      ? '<div class="row" style="margin-top:6px;border-top:2px solid var(--line);padding-top:6px">'
+        + '<span>NEWLY UNLOCKED</span><span></span></div>'
+        + fresh.map(u => `<div class="row bonus"><span>${ITEMS[u.item].icon} ${ITEMS[u.item].name}</span>`
+            + `<span>${u.text}</span></div>`).join('')
+      : '');
+  if (fresh.length) {
+    setTimeout(() => {
+      banner('UNLOCKED ×' + fresh.length, fresh.map(u => ITEMS[u.item].name).join(' · '));
+      AU.fanfare();
+    }, 900);
+  }
   D.finalScore.textContent = 'SCORE: 0';
   let shown = 0, tickN = 0;
   const step = Math.max(1, Math.round(S.score / 45));
@@ -649,6 +665,29 @@ function qualifies(sc) {
 // the attract board shows a dozen at a time and scrolls through the whole hall
 const PAGE = 12;
 let hsPage = 0, hsPageAt = 0;
+function renderCareer() {
+  if (!D.career) return;
+  const st = PROFILE.data.stats;
+  const total = Object.keys(ITEMS).filter(k => ITEMS[k].w > 0).length;
+  const got = Math.min(PROFILE.discovered(), total);
+  const bits = [
+    ['beaches cleared', st.beaches], ['runs', st.runs], ['deaths', st.deaths],
+    ['best beach', st.bestLevel], ['best score', st.bestScore.toLocaleString()],
+    ['faceplants', st.faceplants], ['crabs met', st.crabs],
+    ['times robbed', st.thefts], ['loot chased back', st.recovered],
+    ['times she saved you', st.rescues],
+  ];
+  const next = PROFILE.nextUp(3).map(u =>
+    `<div><span>${ITEMS[u.item].icon} ${ITEMS[u.item].name}</span>` +
+    `<span>${u.text} &mdash; ${Math.min(u.have, u.at)}/${u.at}</span></div>`).join('');
+  D.career.innerHTML =
+    '<div class="ch">&#9670; YOUR CAREER &#9670;</div>' +
+    '<div class="cstats">' + bits.map(b => `<span>${b[0]} <b>${b[1]}</b></span>`).join('') + '</div>' +
+    `<div class="disc">${got} / ${total} BEACH ITEMS DISCOVERED</div>` +
+    `<div class="bar"><i style="width:${Math.round(got / total * 100)}%"></i></div>` +
+    (next ? '<div class="next">' + next + '</div>' : '<div class="disc">everything found. astonishing.</div>');
+}
+
 function renderScores() {
   const l = scoreCache;
   if (!l.length) {
@@ -1124,6 +1163,7 @@ S.mode = 'title';
 generateLevel(runner);
 runner.root.visible = true;
 renderScores();
+renderCareer();
 fetchScores();          // pull the persisted hall from scores.json
 
 const clock = new THREE.Clock();
@@ -1175,7 +1215,7 @@ loop();
 
 // ---------------- debug / balance handle ----------------
 window.DBYF = {
-  S, runner, camera, cam, keys, input, renderer, scene, AU, MUSIC,
+  S, runner, camera, cam, keys, input, renderer, scene, AU, MUSIC, PROFILE,
   ITEMS, SYNERGIES, buildStats, activeSynergies, grant, readyActive, flock,
   spawnThief, spawnVulture, spawnFalcon, spawnEagle, scatterAt, useItem, dropItem,
   spawnTerns, spawnPelicanLine, fireEvent, buildChestAt,

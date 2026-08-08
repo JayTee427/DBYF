@@ -70,6 +70,7 @@ export function freshStats() {
     scouts: 0, waterTime: 0, leaps: 0, bestCombo: 0, cleanLevel: true, pacifist: true,
     raids: 0, thefts: 0, recovered: 0, conned: 0, scattered: 0,
     trips: 0, faceplants: 0, prophecies: 0, events: 0, chests: 0, islands: 0, rescues: 0,
+    eagles: 0,
   };
 }
 

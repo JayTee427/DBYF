@@ -6,6 +6,7 @@
 import { S } from './state.js';
 import { bus } from './bus.js';
 import { AU, say } from './audio.js';
+import { PROFILE } from './profile.js';
 
 /**
  * passive: multipliers folded together every frame.
@@ -254,19 +255,15 @@ export const SYNERGIES = [
 
 // ---------------- weighted roll ----------------
 export function rollItem(rng, favourRare) {
-  const keys = Object.keys(ITEMS);
+  // only things you've actually unlocked can wash up on the beach
+  const keys = Object.keys(ITEMS).filter(k => ITEMS[k].w > 0 && PROFILE.isUnlocked(k));
+  if (!keys.length) return 'sandals';
+  const weight = (k) => ITEMS[k].w * (favourRare && ITEMS[k].rarity >= 2 ? 2.4 : 1);
   let tot = 0;
-  for (const k of keys) {
-    const it = ITEMS[k];
-    tot += it.w * (favourRare && it.rarity >= 2 ? 2.4 : 1);
-  }
+  for (const k of keys) tot += weight(k);
   let r = rng() * tot;
-  for (const k of keys) {
-    const it = ITEMS[k];
-    r -= it.w * (favourRare && it.rarity >= 2 ? 2.4 : 1);
-    if (r <= 0) return k;
-  }
-  return 'sandals';
+  for (const k of keys) { r -= weight(k); if (r <= 0) return k; }
+  return keys[0];
 }
 
 // ---------------- the build ----------------

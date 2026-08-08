@@ -427,6 +427,7 @@ export function spawnEagle(runner, summoned) {
   const b = addBird('eagle', runner.x - 26, runner.z - 20, 20, 'arrive');
   if (!b) return;
   S.eagleTimer = 14;
+  S.stats.eagles++;
   for (const o of flock) if (o.kind !== 'eagle') { o.state = 'flee'; o.t = 0; }
   AU.sweep(1100, 700, 0.7, 'triangle', 0.085);
   bus.toast('\u{1F985} THE BALD EAGLE. everything else just left.', summoned ? 'warn' : '');

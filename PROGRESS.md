@@ -7,7 +7,7 @@ and what's left. Keep it current when things land.
 
 ## Where we are
 
-**v3.4** — sections A and B complete, C1 (set pieces) done. Playable end to end. Third-person runner, endless escalating beaches,
+**v3.5** — sections A and B complete; C1 (set pieces) and meta-progression done. Playable end to end. Third-person runner, endless escalating beaches,
 permanent roguelike builds, a living bird flock, arcade scoring.
 
 ### Built and working
@@ -208,17 +208,15 @@ shoes held over her head, waving. You have ~26 seconds to reach her.
 Ordered by how much I think each would actually improve the game. Detailed
 enough to pick up cold.
 
-## 1. Meta-progression (the biggest remaining gap)
-Nothing carries between runs, which is the one place this still isn't really a
-roguelike. Runs end and nothing changes.
-- **Unlock pool.** Start with ~15 items in the spawn table; milestones add the
-  rest ("clear 5 beaches" → spinach; "chase down 10 stolen items" → the net;
-  "meet 20 towel crabs" → the hermit crab). Doubles as onboarding — a new player
-  isn't handed 40 items and 12 abilities at once.
-- **Persistent stat wall** on the title screen: total beaches, faceplants,
-  crabs met, times she saved you. Cheap, and it makes the Hall of Soles feel
-  like a place.
-- Store alongside `scores.json` (same static-file read, same merge).
+## 1. ~~Meta-progression~~ — DONE in v3.5 (`js/profile.js`)
+Start with **14 items**; **23 unlocks** drip the rest in, each tied to one
+lifetime counter and worded as a humiliation ("faceplant 8 times", "get robbed
+12 times", "die 4 times"). Doubles as onboarding — a new player isn't handed 40
+items at once. Measured curve over three real bot runs: 14 → 19 → 21 → 23.
+A **YOUR CAREER** panel on the title screen shows lifetime stats, a
+"16 / 37 BEACH ITEMS DISCOVERED" bar, and the three unlocks you're closest to.
+Stored in localStorage (personal), unlike `scores.json` (shared).
+*Still could add:* unlockable difficulty modifiers, and a full item codex.
 
 ## 2. Onboarding & a codex
 40 items, 20 events, 12 abilities, 9 birds. Seven tutorial toasts is not enough,
