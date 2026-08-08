@@ -8,5 +8,6 @@ export const bus = {
   banner: () => { },
   shake: () => { },
   instant: () => { },
+  flash: () => { },
 };
 export function wireBus(handlers) { Object.assign(bus, handlers); }

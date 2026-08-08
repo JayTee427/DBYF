@@ -54,6 +54,56 @@ export const ITEMS = {
     desc: '[E] plant it — a patch of shade that stays',
     passive: {}, active: { id: 'plant', cd: 14, label: 'PLANT' }, tags: ['gear'],
   },
+  sunscreen: {
+    icon: '\u{1F9F4}', name: 'SUNSCREEN', rarity: 1, w: 11,
+    desc: 'slows the burn everywhere',
+    passive: { heat: 0.7 }, tags: ['gear'],
+  },
+  popsicle: {
+    icon: '\u{1F9CA}', name: 'HALF-MELTED POPSICLE', rarity: 1, w: 9,
+    desc: '[E] press it to your soles. 3 licks left.',
+    passive: {}, active: { id: 'popsicle', cd: 6, label: 'SOOTHE' }, charges: 3, tags: ['food', 'wet'],
+  },
+  pizza: {
+    icon: '\u{1F355}', name: 'PIZZA SLICE', rarity: 1, w: 8,
+    desc: '[E] eat it. +HP. every bird notices.',
+    passive: { aggro: 1.5 }, active: { id: 'eat', cd: 3, label: 'EAT' }, charges: 1, tags: ['food'],
+  },
+  flipflop: {
+    icon: '\u{1FA74}', name: 'SINGLE FLIP-FLOP', rarity: 1, w: 10,
+    desc: 'protects exactly one foot. it picks.',
+    passive: {}, oneFoot: 0.3, tags: ['gear'],
+  },
+  boot: {
+    icon: '\u{1F45E}', name: 'LEFT BOOT', rarity: 1, w: 8,
+    desc: 'never a right. heavy. one foot safe.',
+    passive: { speed: 0.94 }, oneFoot: 0.12, tags: ['gear'],
+  },
+  lid: {
+    icon: '\u{1F4E6}', name: 'STYROFOAM LID', rarity: 1, w: 8,
+    desc: 'good insulation. squeaks horribly.',
+    passive: { heat: 0.72, aggro: 1.45 }, tags: ['gear', 'loud'],
+  },
+  wax: {
+    icon: '\u{1F9F4}', name: 'SURF WAX', rarity: 1, w: 8,
+    desc: 'faster, and you slide everywhere',
+    passive: { speed: 1.12, slip: true }, tags: ['gear'],
+  },
+  paperback: {
+    icon: '\u{1F4D6}', name: 'SOGGY PAPERBACK', rarity: 1, w: 7,
+    desc: 'earns points while you rest on a refuge',
+    passive: {}, tags: ['odd'],
+  },
+  shorts: {
+    icon: '\u{1FA73}', name: 'SOMEBODY\'S SHORTS', rarity: 2, w: 5,
+    desc: 'pockets. a FOURTH slot. do not think about it.',
+    passive: { slots: 1 }, tags: ['gear', 'odd'],
+  },
+  pipe: {
+    icon: '\u{1F6B7}', name: "OLD CAPTAIN'S PIPE", rarity: 2, w: 5,
+    desc: 'blows bubbles. the Prophet respects it.',
+    passive: {}, tags: ['pirate', 'odd'],
+  },
 
   // ---------------- rare: build-defining ----------------
   spinach: {
@@ -179,7 +229,15 @@ export function makeInstance(key) {
     shield: def.shield || 0,
     charges: def.charges !== undefined ? def.charges : Infinity,
     cd: 0,
+    // single-shoe items protect exactly one foot, and they choose
+    foot: def.oneFoot !== undefined ? (Math.random() < 0.5 ? 'L' : 'R') : null,
   };
+}
+/** Heat multiplier for one specific foot (single shoes, mismatched pairs). */
+export function footHeatMul(which) {
+  let m = 1;
+  for (const s of S.slots) if (s.foot === which && s.def.oneFoot !== undefined) m *= s.def.oneFoot;
+  return m;
 }
 
 /** Which synergies the current build satisfies. */
@@ -193,9 +251,14 @@ export function activeSynergies() {
 
 /** All passives folded together, synergies included. */
 export function buildStats() {
-  const out = { heat: 1, aggro: 1, speed: 1, stam: 1, guard: 0, loot: 1, sunFocus: 1, eagle: false };
+  const out = {
+    heat: 1, aggro: 1, speed: 1, stam: 1, guard: 0, loot: 1, sunFocus: 1,
+    eagle: false, slots: 0, slip: false,
+  };
   for (const s of S.slots) {
     const p = s.def.passive || {};
+    if (p.slots) out.slots += p.slots;
+    if (p.slip) out.slip = true;
     if (p.heat !== undefined) out.heat *= p.heat;
     if (p.aggro !== undefined) out.aggro *= p.aggro;
     if (p.speed !== undefined) out.speed *= p.speed;
@@ -252,6 +315,7 @@ export function grant(key, silent) {
     AU.pickup();
     bus.toast('+ ' + inst.def.icon + ' ' + inst.def.name + ' — ' + inst.def.desc,
       inst.def.cursed ? 'warn' : '');
+    if (inst.foot) bus.toast('...it fits the ' + (inst.foot === 'L' ? 'LEFT' : 'RIGHT') + ' foot. good luck.');
     if (dropped) bus.toast('↻ ' + dropped.def.icon + ' ' + dropped.def.name + ' drops on the sand', 'warn');
     if (inst.def.cursed) say('this feels like a mistake.', false);
     if (key === 'duck') say('quack.', false);

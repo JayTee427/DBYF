@@ -132,6 +132,11 @@ export function heatAt(x, z, t) {
     if (d < ev.focus.r) h += 0.85 * (1 - d / ev.focus.r);
   }
   h -= shadeAt(x, z) * 0.55;
+  // packed damp sand around the sandcastles, and whatever the kite is lying on
+  for (const p of S.coolPads) {
+    const d = Math.hypot(x - p.x, z - p.z);
+    if (d < p.r) h -= 0.85 * (1 - d / p.r);
+  }
   return h;
 }
 

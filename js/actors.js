@@ -10,7 +10,7 @@ import { S, W, HEAT, STAM, DIFFS, effHeat, effAggro, hasItem, footState } from '
 import { scene, groundY, heatAt, wetness, waveZ, waveEdgeAt, shadeAt, pickWeather, applyWeather, buildScenery, resetTide, rebuildTerrain, WEATHER } from './world.js';
 import { AU, say, OW } from './audio.js';
 import { ITEMS, rollItem, buildStats, removeItem } from './items.js';
-import { clearFlock, spawnPlover, buildSanderlings, sanderlingNear } from './birds.js';
+import { flock, clearFlock, spawnPlover, spawnProphet, spawnWillets, buildSanderlings, sanderlingNear } from './birds.js';
 import { bus } from './bus.js';
 
 export const particles = new Particles(scene, 260);
@@ -171,6 +171,8 @@ export class Runner {
     if (S.heatState === 3) base *= 1.22;             // panic sprint
     if (S.heatState === 4) base *= 1.32;
     if (hasItem('sandals')) base *= 1.04;
+    if (S.guilt > 0) base *= 0.78;                // moving slowly, full of regret
+    if (S.ev && S.ev.escort > 0) base *= 1.06;    // the dolphins are rooting for you
     if (S.mode === 'scout') base = 0;
 
     if (wantSprint) S.stamina = clamp(S.stamina - STAM.drain * dt / S.diff.stam, 0, STAM.max);
@@ -183,8 +185,9 @@ export class Runner {
     // Ground grips, air doesn't, and hard turns cost you speed instead of
     // pivoting on the spot like a cursor.
     const grounded = this.grounded;
-    const accel = grounded ? (S.heatState >= 3 ? 40 : 54) : 16;
-    const friction = grounded ? 20 : 1.2;
+    const slippy = buildStats().slip;             // surf wax: everything is a slide
+    const accel = grounded ? (S.heatState >= 3 ? 40 : 54) * (slippy ? 0.6 : 1) : 16;
+    const friction = (grounded ? 20 : 1.2) * (slippy ? 0.22 : 1);
     this.skid = Math.max(0, (this.skid || 0) - dt * 3);
     if (mag > 0 && base > 0) {
       const tvx = wishX * base, tvz = wishZ * base;
@@ -709,7 +712,55 @@ function cloudMesh() {
   return g;
 }
 export function freshEvents() {
-  return { clouds: [], focus: null, surge: 0, nextAt: 10, dolphin: null, whale: null, sneaker: false, warned: false };
+  return {
+    clouds: [], focus: null, surge: 0, nextAt: 10, dolphin: null, whale: null,
+    sneaker: false, warned: false,
+    props: [],            // sea lions, sandcastles, wedding, kite, detector man
+    grunion: 0,           // while > 0 every bird ignores you
+    escort: 0,            // dolphin escort buff timer
+  };
+}
+
+// ---------------- world props for the background events ----------------
+function mkSeaLion(scale, col) {
+  const g = new THREE.Group();
+  const b = meshOf(new THREE.CapsuleGeometry(0.62, 1.5, 4, 8), col);
+  b.rotation.z = Math.PI / 2; b.position.y = 0.6; g.add(b);
+  const h = meshOf(new THREE.SphereGeometry(0.42, 10, 8), col); h.position.set(1.25, 0.85, 0); g.add(h);
+  const nz = meshOf(new THREE.SphereGeometry(0.1, 6, 6), 0x241a20, { outline: false });
+  nz.position.set(1.62, 0.8, 0); g.add(nz);
+  const tl = meshOf(new THREE.ConeGeometry(0.34, 0.7, 6), col);
+  tl.rotation.z = Math.PI / 2; tl.position.set(-1.4, 0.5, 0); g.add(tl);
+  g.scale.setScalar(scale);
+  return g;
+}
+function mkSandcastle(h) {
+  const g = new THREE.Group();
+  const base = meshOf(new THREE.CylinderGeometry(0.75, 0.95, h, 8), 0xe8cf9a);
+  base.position.y = h / 2; g.add(base);
+  const top = meshOf(new THREE.ConeGeometry(0.5, 0.5, 8), 0xd9bd84);
+  top.position.y = h + 0.25; g.add(top);
+  for (let i = 0; i < 3; i++) {
+    const t = meshOf(new THREE.CylinderGeometry(0.22, 0.26, h * 0.7, 6), 0xe8cf9a);
+    const a = i / 3 * Math.PI * 2;
+    t.position.set(Math.cos(a) * 0.85, h * 0.35, Math.sin(a) * 0.85); g.add(t);
+  }
+  return g;
+}
+function addProp(kind, mesh, x, z, extra) {
+  mesh.position.set(x, groundY(x, z), z);
+  levelGroup.add(mesh);
+  const p = Object.assign({ kind, mesh, x, z, t: 0, done: false }, extra || {});
+  S.ev.props.push(p);
+  // some props make the ground under them genuinely cooler
+  if (kind === 'sandcastle') { p.pad = { x, z, r: 7.5 }; S.coolPads.push(p.pad); }
+  if (kind === 'kite') { p.pad = { x, z, r: 2.6 }; S.coolPads.push(p.pad); }
+  return p;
+}
+function dropProp(p) {
+  levelGroup.remove(p.mesh);
+  if (p.pad) { const i = S.coolPads.indexOf(p.pad); if (i >= 0) S.coolPads.splice(i, 1); }
+  const j = S.ev.props.indexOf(p); if (j >= 0) S.ev.props.splice(j, 1);
 }
 export function spawnCloud(x, z) {
   const mesh = cloudMesh();
@@ -738,8 +789,84 @@ export function fireEvent(kind, runner) {
   } else if (kind === 'sneaker') {
     ev.surge += 12; ev.sneaker = true;
     toast('\u{1F30A} SNEAKER WAVE', 'bad'); say('uh oh.', true); AU.splash(true);
+
+  } else if (kind === 'dolphins') {
+    // a pod paces you just offshore. purely nice, until you catch fire.
+    const g = new THREE.Group();
+    for (let i = 0; i < 3; i++) {
+      const d = meshOf(new THREE.CapsuleGeometry(0.5, 1.7, 4, 8), 0x6a7a8a);
+      d.rotation.z = Math.PI / 2; d.position.set(i * 3.2, 0, (i % 2) * 2.2);
+      g.add(d);
+    }
+    const p = addProp('dolphins', g, runner.x - 6, -22, { life: 26 });
+    p.mesh.position.y = -0.6;
+    ev.escort = 26;
+    toast('\u{1F42C} a pod pulls alongside you');
+    bus.banner('FEELING COOL', 'the dolphins approve');
+    AU.splash(false); say('hey! hey guys!', true);
+
+  } else if (kind === 'sealions') {
+    // a heap of them, asleep, directly in the way
+    const g = new THREE.Group();
+    const n = 5 + Math.floor(Math.random() * 4);
+    for (let i = 0; i < n; i++) {
+      const s = mkSeaLion(0.8 + Math.random() * 0.5, [0x6b5a4e, 0x574a41, 0x7a6858][i % 3]);
+      s.position.set((Math.random() - 0.5) * 6, 0, (Math.random() - 0.5) * 4.5);
+      s.rotation.y = Math.random() * 6.3;
+      g.add(s);
+    }
+    const px = clamp(runner.x + 34 + Math.random() * 30, W.xMin, W.goalX - 14);
+    addProp('sealions', g, px, clamp(-2 + Math.random() * 10, -4, 14), { r: 6.5, woke: false });
+    toast('\u{1F9AD} a pile of sleeping sea lions. tiptoe.');
+
+  } else if (kind === 'sandcastle') {
+    // packed damp sand between the castles: a cool road, if you're careful
+    const g = new THREE.Group();
+    const castles = [];
+    for (let i = 0; i < 7; i++) {
+      const c = mkSandcastle(0.7 + Math.random() * 0.8);
+      c.position.set((Math.random() - 0.5) * 11, 0, (Math.random() - 0.5) * 7);
+      g.add(c); castles.push(c);
+    }
+    const pad = new THREE.Mesh(new THREE.CircleGeometry(7.5, 22),
+      new THREE.MeshBasicMaterial({ color: 0x7a6242, transparent: true, opacity: 0.42, depthWrite: false }));
+    pad.rotation.x = -Math.PI / 2; pad.position.y = 0.04; pad.renderOrder = 3; g.add(pad);
+    const px = clamp(runner.x + 30 + Math.random() * 34, W.xMin, W.goalX - 14);
+    addProp('sandcastle', g, px, clamp(2 + Math.random() * 14, -2, 20), { r: 7.5, castles });
+    toast('\u{1F3F0} SANDCASTLE KINGDOM — cool sand, mind the towers');
+
+  } else if (kind === 'kite') {
+    const g = new THREE.Group();
+    const k = meshOf(new THREE.ConeGeometry(1.5, 2.6, 4), 0xff5c8a);
+    k.rotation.x = -Math.PI / 2; k.position.y = 0.25; g.add(k);
+    const tail = meshOf(new THREE.BoxGeometry(0.12, 0.08, 2.4), 0xffe07a, { outline: false });
+    tail.position.set(0, 0.2, -2); g.add(tail);
+    const px = clamp(runner.x + 22 + Math.random() * 26, W.xMin, W.goalX - 12);
+    addProp('kite', g, px, clamp(4 + Math.random() * 12, -2, 20), { r: 2.4, life: 20, reeled: false });
+    toast('\u{1FA81} a kite comes down nearby — it\'s cool to stand on');
+
+  } else if (kind === 'grunion') {
+    ev.grunion = 22;
+    for (const b of [...flock]) if (b.kind === 'gull') { b.state = 'flee'; b.t = 0; }
+    S.aggro = 0;
+    bus.banner('GRUNION RUN', 'every bird on the beach just left');
+    toast('\u{1F41F} the shore is YOURS');
+    AU.shanty(); say('where did everybody go? oh. fish.', true);
+
+  } else if (kind === 'wedding') {
+    const g = new THREE.Group();
+    for (let r = 0; r < 3; r++) for (let i = 0; i < 5; i++) {
+      const chair = meshOf(new THREE.BoxGeometry(0.5, 0.7, 0.5), 0xfdfaf4);
+      chair.position.set(-3 + i * 1.5, 0.35, -1.6 + r * 1.6); g.add(chair);
+    }
+    const arch = meshOf(new THREE.TorusGeometry(1.7, 0.13, 6, 14, Math.PI), 0xf6e7f2);
+    arch.position.set(0, 0.1, 3.6); g.add(arch);
+    const px = clamp(runner.x + 30 + Math.random() * 30, W.xMin, W.goalX - 14);
+    addProp('wedding', g, px, clamp(6 + Math.random() * 12, 0, 20), { r: 5.5, crashed: false });
+    toast('\u{1F492} somebody is getting married down there');
   }
   ev.nextAt = S.t + 12 + Math.random() * 10;
+  S.stats.events++;
 }
 export function updateEvents(dt, runner) {
   const ev = S.ev;
@@ -776,14 +903,111 @@ export function updateEvents(dt, runner) {
   }
   if (ev.sneaker && ev.surge <= 0.5) ev.sneaker = false;
 
+  // ---- grunion run: total bird amnesty
+  if (ev.grunion > 0) {
+    ev.grunion -= dt;
+    S.aggro = 0;
+    if (ev.grunion <= 0) toast('the birds are coming back.', 'warn');
+  }
+  // ---- dolphin escort: a small buff, and they judge you if you ignite
+  if (ev.escort > 0) {
+    ev.escort -= dt;
+    if (S.heatState >= 4) {
+      ev.escort = 0;
+      toast('the dolphins peel away, embarrassed for you', 'warn');
+      say('no — come back —', true);
+    }
+  }
+  updateProps(dt, runner);
+
   if (S.t >= ev.nextAt) {
-    const pool = [['cloud', 30], ['whale', 22]];
-    if (S.level >= 2) pool.push(['focus', 26], ['sneaker', 18]);
+    const pool = [['cloud', 26], ['whale', 18], ['dolphins', 20], ['sealions', 18], ['sandcastle', 18], ['kite', 14]];
+    if (S.level >= 2) pool.push(['focus', 22], ['sneaker', 16], ['wedding', 12]);
+    if (S.level >= 3) pool.push(['grunion', 9]);
     let tot = 0; for (const [, w] of pool) tot += w;
     let r = Math.random() * tot; let pick = 'cloud';
     for (const [k, w] of pool) { r -= w; if (r <= 0) { pick = k; break; } }
     fireEvent(pick, runner);
   }
+}
+
+/** The physical set dressing: things you can bump into, wake up, or knock over. */
+function updateProps(dt, runner) {
+  const ev = S.ev;
+  for (const p of [...ev.props]) {
+    p.t += dt;
+    const d = Math.hypot(runner.x - p.x, runner.z - p.z);
+
+    if (p.kind === 'dolphins') {
+      p.life -= dt;
+      p.mesh.position.x = damp(p.mesh.position.x, runner.x - 4, 1.2, dt);
+      p.mesh.position.y = -0.6 + Math.sin(S.t * 1.6) * 0.9;
+      p.mesh.rotation.z = Math.sin(S.t * 1.6) * 0.35;
+      if (p.life <= 0 || ev.escort <= 0) dropProp(p);
+
+    } else if (p.kind === 'sealions') {
+      // they snore. run at them and the whole heap goes off like a car alarm.
+      p.mesh.position.y = groundY(p.x, p.z) + Math.sin(S.t * 0.9) * 0.04;
+      if (!p.woke && d < p.r && runner.speed > 6.5) {
+        p.woke = true;
+        const a = Math.atan2(runner.x - p.x, runner.z - p.z);
+        runner.kx += Math.sin(a) * 16; runner.kz += Math.cos(a) * 16;
+        runner.trip('stumble', '\u{1F9AD} YOU WOKE THE SEA LIONS');
+        S.aggro = Math.min(100, S.aggro + 18);
+        AU.bark(0.16); setTimeout(() => AU.bark(0.14), 180); setTimeout(() => AU.bark(0.12), 380);
+        bus.shake(1);
+        say('sorry! SORRY!', true);
+      } else if (!p.woke && d < p.r + 3 && runner.speed <= 6.5 && !p.praised) {
+        p.praised = true;
+        toast('\u{1F92B} tiptoeing past the sea lions  +250'); addScore(250);
+      }
+
+    } else if (p.kind === 'sandcastle') {
+      if (d < p.r) {
+        for (const c of p.castles) {
+          if (c.userData.gone) continue;
+          const cd = Math.hypot(runner.x - (p.x + c.position.x), runner.z - (p.z + c.position.z));
+          if (cd < 1.2) {
+            c.userData.gone = true;
+            c.scale.set(1.3, 0.12, 1.3);
+            particles.burst(p.x + c.position.x, groundY(p.x, p.z) + 0.4, p.z + c.position.z, 10,
+              { color: 0xe8cf9a, size: 0.3, ttl: 0.7, spread: 1.8 });
+            AU.poof();
+            S.guilt = 6;
+            toast('\u{1F62C} you kicked over a child\'s sandcastle', 'bad');
+            say(['sorry, sorry, sorry.', 'I didn\'t see it!', 'oh no. oh no.'][Math.floor(Math.random() * 3)], true);
+          }
+        }
+      }
+
+    } else if (p.kind === 'kite') {
+      p.life -= dt;
+      p.mesh.rotation.z = Math.sin(S.t * 2) * 0.1;
+      if (p.life < 6) {                       // he starts reeling it in
+        p.x += 4.5 * dt; p.z += 1.2 * dt;
+        p.mesh.position.set(p.x, groundY(p.x, p.z) + 0.1 + (6 - p.life) * 0.25, p.z);
+        if (p.pad) { p.pad.x = p.x; p.pad.z = p.z; }
+        if (!p.reeled) { p.reeled = true; toast('the kite guy is reeling it back in!', 'warn'); }
+      }
+      if (p.life <= 0) dropProp(p);
+
+    } else if (p.kind === 'wedding') {
+      if (!p.crashed && d < p.r) {
+        p.crashed = true;
+        S.guilt = 8;
+        toast('\u{1F4F8} WEDDING CRASHER — you are in every photo', 'bad');
+        say('excuse me. sorry. lovely dress.', true);
+        // the photographer will find you
+        p.flashUntil = S.t + 8;
+      }
+      if (p.flashUntil && S.t < p.flashUntil && Math.random() < dt * 1.6) {
+        bus.flash(0.7);
+        AU.tone(2000, 0.04, 'sine', 0.05);
+      }
+    }
+  }
+  // guilt: you move slower when you feel bad about yourself
+  if (S.guilt > 0) S.guilt -= dt;
 }
 
 // ============================================================
@@ -846,6 +1070,7 @@ export function generateLevel(runner) {
     if (S.ev.whale) scene.remove(S.ev.whale.mesh);
   }
   S.ev = freshEvents(); S.ev.nextAt = S.t + 9;
+  S.coolPads = []; S.guilt = 0; S.prophet = null;
   particles.clear(); prints.clear();
 
   S.seed = Math.floor(Math.random() * 90000) + 10000;
@@ -924,6 +1149,16 @@ export function generateLevel(runner) {
   }
   // a plover works this beach from level 3 on, running its little con
   if (S.level >= 3 && rng() < 0.55) spawnPlover(runner);
+
+  // the Wash Prophet stands apart from everything, somewhere along the way
+  const px = lerp(W.startX, W.goalX, 0.25 + rng() * 0.5);
+  spawnProphet(px, clamp(-4 + rng() * 6, W.zMin + 2, 8));
+
+  // a couple of willet groups doze on the open sand as tripwires
+  for (let i = 0; i < 2; i++) {
+    const wx = lerp(W.startX, W.goalX, 0.2 + rng() * 0.6);
+    spawnWillets(wx, clamp(4 + rng() * 14, -2, 22), 3);
+  }
 
   S.levelTime = 0; S.streak = 0;
   S.stats.cleanLevel = true; S.stats.pacifist = true;

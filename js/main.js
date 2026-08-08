@@ -18,6 +18,7 @@ import {
 import {
   ITEMS, SYNERGIES, buildStats, activeSynergies, grant, removeItem, findItem,
   readyActive, tickCooldowns, checkSynergies, resetSynergies, hasItem as hasIt,
+  footHeatMul,
 } from './items.js';
 import {
   flock, updateBirds, updateSanderlings, scatterAt, clearFlock,
@@ -106,6 +107,7 @@ wireBus({
   toast, score: addScore, banner,
   shake: (v) => { cam.shake = Math.max(cam.shake, v); hitStop(v * 0.05); },
   instant: instantPickup,
+  flash: (a) => flashScreen(a, 220),
 });
 
 // ---------------- input ----------------
@@ -230,6 +232,21 @@ function useItem() {
     S.freeze = 4.0;
     toast('\u{23F1} TIME STOPS. the sun looks annoyed.');
     AU.sweep(900, 300, 0.7, 'sine', 0.08); say('ha!', true);
+
+  } else if (id === 'popsicle') {
+    S.feet.L = Math.max(0, S.feet.L - 42); S.feet.R = Math.max(0, S.feet.R - 42);
+    inst.charges--;
+    toast('\u{1F9CA} aaaahhh — ' + inst.charges + ' licks left');
+    AU.tone(1300, 0.1, 'sine', 0.06); AU.noise(0.3, 2400, 0.03, true);
+    if (inst.charges <= 0) { removeItem(inst); toast('the popsicle is gone. only stick remains.', 'warn'); }
+
+  } else if (id === 'eat') {
+    S.health = Math.min(100, S.health + 34);
+    inst.charges--;
+    toast('\u{1F355} +34 HP. worth it.');
+    AU.tone(300, 0.09, 'triangle', 0.07); AU.tone(240, 0.12, 'triangle', 0.06, 0.1);
+    say('mmm. sandy.', true);
+    if (inst.charges <= 0) { removeItem(inst); }
 
   } else if (id === 'plant') {
     if (planted) scene.remove(planted.mesh);
@@ -596,6 +613,12 @@ function simulate(dt) {
 
   // ---------- heat ----------
   const build = buildStats();
+  S.maxSlots = 3 + build.slots;              // shorts grant a fourth pocket
+  // the soggy paperback pays you to actually sit still on a refuge
+  if (hasIt('paperback') && runner.refuge && runner.speed < 0.8) {
+    S.readT = (S.readT || 0) + dt;
+    if (S.readT > 1) { S.readT = 0; addScore(45); }
+  }
   const shade = shadeAt(runner.x, runner.z);
   const airborne = !runner.grounded;
   surfing = Math.max(0, surfing - dt);
@@ -621,15 +644,18 @@ function simulate(dt) {
     }
   }
   if (S.invuln > 0) rate = Math.min(rate, HEAT.coolRefuge);   // the sand simply gives up
-  // the planted foot takes the brunt — alternating is how you survive
+  // the planted foot takes the brunt — alternating is how you survive.
+  // single shoes protect one foot only, which is very funny and quite useful.
+  const mulL = rate > 0 ? footHeatMul('L') : 1;
+  const mulR = rate > 0 ? footHeatMul('R') : 1;
   const moving = runner.speed > 0.6 && runner.grounded;
   if (rate > 0 && moving) {
-    S.feet[S.plant] = clamp(S.feet[S.plant] + rate * 1.35 * dt, 0, 100);
-    const other = S.plant === 'L' ? 'R' : 'L';
-    S.feet[other] = clamp(S.feet[other] + rate * 0.45 * dt, 0, 100);
+    const lead = S.plant === 'L' ? 1.35 : 0.45;
+    S.feet.L = clamp(S.feet.L + rate * lead * mulL * dt, 0, 100);
+    S.feet.R = clamp(S.feet.R + rate * (1.8 - lead) * mulR * dt, 0, 100);
   } else {
-    S.feet.L = clamp(S.feet.L + rate * dt, 0, 100);
-    S.feet.R = clamp(S.feet.R + rate * dt, 0, 100);
+    S.feet.L = clamp(S.feet.L + rate * mulL * dt, 0, 100);
+    S.feet.R = clamp(S.feet.R + rate * mulR * dt, 0, 100);
   }
   S.stats.maxL = Math.max(S.stats.maxL, S.feet.L);
   S.stats.maxR = Math.max(S.stats.maxR, S.feet.R);

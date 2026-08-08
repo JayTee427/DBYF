@@ -85,46 +85,58 @@ mediocre movement just produces more mediocre-feeling content.
 ## B. Content gaps from the design bible
 
 ### Birds still missing
-- [ ] **Willets / Godwits** — flush and shriek if you sprint through them; spikes attention
+- [x] **Willets / Godwits** — *v2.6*: groups doze on the open sand probing for food; sprint
+      within 6m and the whole group explodes upward screaming, +26 attention
 - [ ] **Least Terns** — precision aerial harassment forcing zigzags
 - [ ] **Brown Pelican squadrons** — formation flyby, moving wall, traveling shadow lure
+      *(the pelican model now exists — it's the Wash Prophet)*
 
 ### Weather still missing
 - [ ] **Wind** — prankster; blows refuges (and the umbrella goal) around
 - [ ] **The Humidity** — invisible oppression bar, "It's Not the Heat, It's..."
 - [ ] **Dust Devil** — a five-year-old tornado carrying items around; chase it to shop
 
-### Background events — biggest content hole
+### Background events
 Built: cloud shade, whale wave, sun focus, sneaker wave.
-- [ ] **Dolphin escort** — ⚠️ *regression: existed in v0.3, lost in the v1 rebuild*
-- [ ] Sea lion pile (bark-wave knockback, tiptoe zone)
-- [ ] Sandcastle Kingdom (cool packed paths; topple one → guilt debuff)
-- [ ] Kite Guy (crashed kite = temporary refuge, ride it as he reels it in)
-- [ ] Grunion run (every bird leaves; the shore is yours)
-- [ ] Beach wedding (Wedding Crasher debuff, paparazzi whiteout)
+- [x] **Dolphin escort** *(v2.6, regression restored)* — a pod paces you offshore for
+      ~26s, +6% speed, and they peel away embarrassed if you catch fire
+- [x] **Sea lion pile** *(v2.6)* — a heap asleep in the way. Sprint near and the whole
+      pile goes off, barking, and knocks you flat. Tiptoe past instead for +250.
+- [x] **Sandcastle Kingdom** *(v2.6)* — packed damp sand around the towers is a genuine
+      cool road; clip a castle and it collapses, with guilt slowing you 22% for 6s
+- [x] **Kite Guy** *(v2.6)* — a crashed kite is a cool patch to stand on, until he
+      starts reeling it back in and it slides away from you
+- [x] **Grunion run** *(v2.6)* — every bird leaves for 22s, attention pinned at zero
+- [x] **Beach wedding** *(v2.6)* — cross the seating and you're Wedding Crasher: guilt,
+      plus the photographer's flash whiting out your screen for 8s
 - [ ] Metal Detector Man (a walking loot forecast)
 - [ ] Surf school parade, volleyball cartoon physics
 - [ ] Low tide reveal (greed timer), seagull civil war, fisherman's backcast
 
 ### Systems never started
-- [ ] **The Wash Prophet** — one weird pelican per beach, never attacks; stand near
-      3s for a cryptic hint that's 50/50 real intel vs. pelican nonsense, never labelled.
-      Captain's pipe upgrades him to 75/25.
+- [x] **The Wash Prophet** *(v2.6)* — one pelican per beach, standing apart, never
+      attacks. Linger 2.4s and he offers a line; 50/50 real intel vs. pelican nonsense,
+      never labelled which. The captain's pipe raises him to 75/25.
 - [ ] **Pirate's Treasure** — half-buried chest off the optimal path →
       doubloons (score, heavy), pirate boots, cursed compass (points through the
       *worst* route), an enormous angry crab, and map fragments ×3 →
       **Treasure Island** bonus level (all rock, no lava, pure platforming, one heron-equivalent)
 
-### Items — 21 of ~40 built
-⚠️ **Regressions — existed in v1, dropped in the v2 item rewrite:**
-- [ ] sunscreen · [ ] half-melted popsicle · [ ] pizza slice
+### Items — 31 of ~40 built
+- [x] ~~regressions~~ *restored in v2.6*: sunscreen, half-melted popsicle (3 charges),
+      pizza slice (now an [E] you eat)
+- [x] **single flip-flop** and **left boot** — each protects exactly ONE randomly chosen
+      foot, which makes the two-foot gauge genuinely asymmetric and very funny
+- [x] **styrofoam lid** (great insulation, squeaks, +45% attention)
+- [x] **surf wax** (faster but everything becomes a slide — friction cut to 22%)
+- [x] **soggy paperback** (points while you sit still on a refuge)
+- [x] **shorts** — the fourth slot. Paradox unexplained, as designed.
+- [x] **old captain's pipe** — upgrades the Wash Prophet to 75/25
 
-Never built:
-- [ ] single flip-flop (random foot!) · [ ] left boot (never a right) · [ ] styrofoam lid (squeak aggro)
-- [ ] binoculars · [ ] beach leftovers · [ ] **shorts** (grants a 4th slot, paradox unexplained)
-- [ ] surf wax · [ ] lost GoPro (picture-in-picture intel) · [ ] somebody's car keys (rerolls the goal)
-- [ ] rusty lantern (identifies mystic items pre-pickup) · [ ] old captain's pipe (maritime narration)
-- [ ] soggy paperback (score for refuge downtime) · [ ] old boat board
+Still never built:
+- [ ] binoculars · [ ] beach leftovers · [ ] lost GoPro (picture-in-picture intel)
+- [ ] somebody's car keys (rerolls the goal) · [ ] rusty lantern (identify pre-pickup)
+- [ ] old boat board
 
 ## C. Structure & replay
 

@@ -174,6 +174,7 @@ const PRESET = {
   plover:  { body: 0xf6ecdc, wing: 0xbfa981, tip: 0x4a4038, head: 0xfff8ec, beak: 0x2e2a26, scale: 0.7 },
   vulture: { body: 0x3d3138, wing: 0x241e24, tip: 0x141014, head: 0xb05a4a, beak: 0xe0d0b0, scale: 1.6 },
   falcon:  { body: 0x6a6472, wing: 0x3a3644, tip: 0x16141c, head: 0xd8cfc0, beak: 0x2e2a30, scale: 1.25 },
+  pelican: { body: 0xe8e2d6, wing: 0x9a9488, tip: 0x3a3630, head: 0xf6f1e6, beak: 0xf0b64a, scale: 1.55 },
   eagle:   { body: 0x5a4230, wing: 0x3a2a18, tip: 0x1e1610, head: 0xfaf7f2, beak: 0xf5c542, scale: 2.3 },
 };
 
@@ -380,10 +381,12 @@ export function updateBirds(dt, runner, frozen) {
     switch (b.kind) {
       case 'gull': updateGull(b, dt, runner, stats); break;
       case 'thief': updateThief(b, dt, runner, stats); break;
-      case 'plover': updatePlover(b, dt, runner); break;
+      case 'plover': (b.state === 'willet' || b.state === 'flushed')
+        ? updateWillet(b, dt, runner) : updatePlover(b, dt, runner); break;
       case 'vulture': updateVulture(b, dt, runner); break;
       case 'falcon': updateFalcon(b, dt, runner, stats); break;
       case 'eagle': updateEagle(b, dt, runner); break;
+      case 'pelican': updateProphet(b, dt, runner); break;
     }
     b.mesh.position.set(b.x, b.y, b.z);
     if (b.carrySprite) b.carrySprite.position.set(b.x, b.y - 0.55, b.z);
@@ -703,6 +706,99 @@ function updateEagle(b, dt, runner) {
     flapFly(b); b.y += 6 * dt;
     b.x += Math.sin(b.angle) * 13 * dt; b.z += Math.cos(b.angle) * 13 * dt;
     if (b.t > 3) killBird(b);
+  }
+}
+
+// ---------------- the Wash Prophet ----------------
+const PROPHECY_REAL = [
+  'the pale road bends toward the water, past the third stone',
+  'the flock tires of you when you run at them',
+  'what the sea touches, it forgives',
+  'the shade moves. so should you.',
+  'your left foot will betray you first',
+  'the cabana is closer than the goal, and kinder',
+];
+const PROPHECY_NONSENSE = [
+  'the sand remembers a Tuesday',
+  'beware the man with two hats and no hat',
+  'I have seen the inside of a bucket. it was fine.',
+  'seven crabs. no reason. seven.',
+  'the moon owes me money',
+  'do not trust a gull named Deborah',
+  'everything is a sandwich if you are brave',
+];
+/** One odd pelican per beach. Stand near him and he says something. */
+export function spawnProphet(x, z) {
+  const b = addBird('pelican', x, z, groundY(x, z) + 0.5, 'prophet');
+  if (!b) return null;
+  b.mesh.scale.setScalar(1.55 * 0.62);
+  b.nearT = 0; b.spoke = false; b.cool = 0;
+  S.prophet = b;
+  return b;
+}
+function updateProphet(b, dt, runner) {
+  const gy = groundY(b.x, b.z);
+  b.y = damp(b.y, gy + 0.5, 8, dt);
+  fold(b);
+  b.mesh.rotation.y = damp(b.mesh.rotation.y, Math.atan2(runner.x - b.x, runner.z - b.z), 3, dt);
+  b.mesh.userData.head.position.y = 0.14 + Math.sin(S.t * 0.8 + b.hop) * 0.03;
+  b.cool -= dt;
+  const d = Math.hypot(runner.x - b.x, runner.z - b.z);
+  if (d < 5) {
+    b.nearT += dt;
+    if (b.nearT > 2.4 && b.cool <= 0) {
+      b.cool = 14; b.nearT = 0;
+      // the pipe makes him markedly more reliable. allegedly.
+      const realOdds = hasItem('pipe') ? 0.75 : 0.5;
+      const real = Math.random() < realOdds;
+      const pool = real ? PROPHECY_REAL : PROPHECY_NONSENSE;
+      const line = pool[Math.floor(Math.random() * pool.length)];
+      bus.toast('\u{1F9D9} "' + line + '"');
+      S.stats.prophecies++;
+      AU.tone(392, 0.2, 'sine', 0.05); AU.tone(523, 0.26, 'sine', 0.04, 0.18);
+      say(line, true);
+    }
+  } else b.nearT = Math.max(0, b.nearT - dt);
+}
+
+// ---------------- willets: the beach's motion sensors ----------------
+export function spawnWillets(x, z, n) {
+  for (let i = 0; i < n; i++) {
+    const b = addBird('plover', x + (Math.random() - 0.5) * 7, z + (Math.random() - 0.5) * 5,
+      0, 'willet');
+    if (!b) return;
+    b.mesh.scale.setScalar(0.95 * 0.62);
+    b.y = groundY(b.x, b.z) + 0.2;
+  }
+}
+function updateWillet(b, dt, runner) {
+  const gy = groundY(b.x, b.z);
+  if (b.state === 'willet') {
+    b.y = damp(b.y, gy + 0.2, 9, dt);
+    groundAnim(b, dt, false);
+    // probing the sand, minding their own business
+    b.mesh.userData.head.position.y = -0.1 + Math.abs(Math.sin(S.t * 2.5 + b.hop)) * 0.14;
+    const d = Math.hypot(runner.x - b.x, runner.z - b.z);
+    if (d < 6 && runner.speed > 7.5) {
+      // FLUSH — the whole group explodes upward, screaming
+      for (const o of flock) {
+        if (o.state !== 'willet') continue;
+        if (Math.hypot(o.x - b.x, o.z - b.z) > 12) continue;
+        o.state = 'flushed'; o.t = 0;
+        o.angle = Math.atan2(o.x - runner.x, o.z - runner.z) + (Math.random() - 0.5);
+      }
+      S.aggro = Math.min(100, S.aggro + 26);
+      bus.toast('\u{1F426} WILLETS! the whole beach heard that', 'bad');
+      AU.gullCall(); AU.screech();
+      say('sorry! sorry!', false);
+    }
+  } else {
+    flap(b, 1);
+    b.y += 7 * dt;
+    b.x += Math.sin(b.angle) * 13 * dt;
+    b.z += Math.cos(b.angle) * 13 * dt;
+    bank(b, b.angle, dt);
+    if (b.t > 2.6) killBird(b);
   }
 }
 
