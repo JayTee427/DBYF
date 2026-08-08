@@ -205,6 +205,22 @@ export function emojiSprite(char, size = 1.6) {
   return s;
 }
 
+/** Chunky text on a billboard — for pickups whose icon is a word, not an emoji. */
+export function labelSprite(text, size = 1.8, fg = '#fff8d0', bg = '#c11f3d') {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d');
+  g.fillStyle = bg;
+  g.beginPath(); g.roundRect(8, 30, 112, 68, 14); g.fill();
+  g.lineWidth = 7; g.strokeStyle = '#2a0a12'; g.stroke();
+  g.fillStyle = fg;
+  g.font = 'bold 54px Consolas, monospace';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(text, 64, 66);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true }));
+  s.scale.setScalar(size);
+  return s;
+}
+
 /** A face drawn on a canvas — for the Sun and weather characters. */
 export function faceSprite(draw, size, px = 256) {
   const c = document.createElement('canvas'); c.width = c.height = px;

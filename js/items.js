@@ -123,6 +123,13 @@ export const ITEMS = {
     desc: 'summons the eagle. he may bless or abduct you.',
     passive: { aggro: 1.35, eagle: true }, cursed: true, tags: ['food'],
   },
+
+  // ---------------- and then there's this ----------------
+  sixseven: {
+    icon: '\u{1F522}', label: '6|7', name: '6-7', rarity: 3, w: 1.6,
+    desc: 'nobody knows why. it just works.',
+    passive: {}, instant: true, tags: ['odd'],
+  },
 };
 
 // ---------------- synergies: the reason to plan a build ----------------
@@ -234,6 +241,8 @@ export function resetSynergies() { lastSyn = new Set(); }
 
 /** Add to the build. Returns the item pushed out, if any. */
 export function grant(key, silent) {
+  // some things aren't carried — they just happen to you
+  if (ITEMS[key].instant) { bus.instant(key); return null; }
   const inst = makeInstance(key);
   S.slots.push(inst);
   let dropped = null;

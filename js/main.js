@@ -53,6 +53,7 @@ const D = {
   state: $('heatstate'), toasts: $('toasts'), vig: $('vignette'), flash: $('flash'),
   arrow: $('arrow'), scoutHint: $('scoutHint'), combo: $('combo'),
   banner: $('banner'), ability: $('ability'), swapHint: $('swapHint'), syn: $('syn'),
+  invuln: $('invuln'),
   ilTitle: $('ilTitle'), ilLines: $('ilLines'), ilNext: $('ilNext'),
   verdict: $('verdict'), epitaph: $('epitaph'), card: $('card'), finalScore: $('finalScore'),
   initials: $('initials'), cells: [$('c0'), $('c1'), $('c2')], hs: $('hsrows'),
@@ -75,8 +76,27 @@ function banner(title, sub) {
   clearTimeout(banner._t);
   banner._t = setTimeout(() => D.banner.classList.add('hidden'), 2600);
 }
+/** Pickups that fire on contact instead of taking a slot. */
+function instantPickup(key) {
+  if (key === 'sixseven') {
+    const dur = 2 + Math.random() * 4;              // 2–6 seconds, nobody knows why
+    S.invuln = dur; S.invulnMax = dur; S.lastChant = 0;
+    banner('6 &mdash; 7', 'invincible for ' + dur.toFixed(1) + ' seconds');
+    toast('\u{1F522} SIX SEVEN');
+    addScore(600);
+    cam.shake = 0.7;
+    AU.tone(587, 0.16, 'triangle', 0.09);
+    AU.tone(784, 0.2, 'triangle', 0.09, 0.16);
+    particles.burst(runner.x, runner.y + 1.2, runner.z, 26,
+      { color: 0xffd94a, size: 0.42, ttl: 1.1, vy: 3.2, spread: 3.4 });
+  }
+}
 wire(toast, addScore);
-wireBus({ toast, score: addScore, banner, shake: (v) => { cam.shake = Math.max(cam.shake, v); } });
+wireBus({
+  toast, score: addScore, banner,
+  shake: (v) => { cam.shake = Math.max(cam.shake, v); },
+  instant: instantPickup,
+});
 
 // ---------------- input ----------------
 const keys = new Set();
@@ -282,7 +302,8 @@ function startRun(diffKey) {
   S.mode = 'play'; S.level = 1; S.score = 0; S.runTime = 0;
   S.feet.L = 0; S.feet.R = 0; S.health = 100; S.stamina = STAM.max;
   S.aggro = 0; S.slots = []; S.stats = freshStats(); S.tutorial = 0;
-  S.heatState = 0; S.prevHeatState = 0; S.combo = 0;
+  S.heatState = 0; S.prevHeatState = 0; S.combo = 0; S.invuln = 0;
+  resetSynergies();
   clearRoute();
   generateLevel(runner);
   cam.yaw = -Math.PI / 2; cam.pitch = 0.30;
@@ -503,6 +524,21 @@ function simulate(dt) {
   const st = runner.update(dt, input, cam.yaw);
   const { inWater, refuge } = st;
 
+  // ---------- 6-7 ----------
+  if (S.invuln > 0) {
+    S.invuln -= dt;
+    if (S.t - S.lastChant > 0.62) {                 // "six seven, six seven, six seven"
+      S.lastChant = S.t;
+      say('six seven', true);
+      AU.tone(S.chantFlip ? 587 : 784, 0.1, 'triangle', 0.055);
+      S.chantFlip = !S.chantFlip;
+    }
+    particles.spawn(runner.x + (Math.random() - 0.5) * 1.4, runner.y + 0.6 + Math.random() * 1.4,
+      runner.z + (Math.random() - 0.5) * 1.4,
+      { color: 0xffd94a, size: 0.3, ttl: 0.6, vy: 1.6, opacity: 0.8 });
+    if (S.invuln <= 0) { toast('...and it wears off', 'warn'); say('aw.', true); }
+  }
+
   // ---------- heat ----------
   const build = buildStats();
   const shade = shadeAt(runner.x, runner.z);
@@ -529,6 +565,7 @@ function simulate(dt) {
       if (kelp.shield <= 0) toast('the kelp is spent — soak it in the sea', 'warn');
     }
   }
+  if (S.invuln > 0) rate = Math.min(rate, HEAT.coolRefuge);   // the sand simply gives up
   // the planted foot takes the brunt — alternating is how you survive
   const moving = runner.speed > 0.6 && runner.grounded;
   if (rate > 0 && moving) {
@@ -563,9 +600,10 @@ function simulate(dt) {
 
   // ---------- health ----------
   // health goes when a foot is genuinely cooked, and comes back when you cool off
-  for (const f of ['L', 'R']) if (S.feet[f] > 78) S.health -= (S.feet[f] - 78) / 22 * 6.0 * dt;
+  const untouchable = S.invuln > 0;
+  for (const f of ['L', 'R']) if (!untouchable && S.feet[f] > 78) S.health -= (S.feet[f] - 78) / 22 * 6.0 * dt;
   if (S.heatState === 4) {
-    S.health -= 4.0 * dt;
+    if (!untouchable) S.health -= 4.0 * dt;
     if (hasItem('duck') && S.t - S.lastSqueak > 2.6) { S.lastSqueak = S.t; AU.squeak(); }
   }
   if (worst < 25 && S.health < 100) S.health += 2.2 * dt;
@@ -615,7 +653,8 @@ function simulate(dt) {
     it.box.position.y = 0.55 + Math.sin(it.ph) * 0.14;
     const d = Math.hypot(runner.x - it.x, runner.z - it.z);
     if (d < 2.9) {
-      if (S.slots.length < S.maxSlots) takeItem(it);
+      // instant pickups don't need a slot, so they never make you choose
+      if (ITEMS[it.key].instant || S.slots.length < S.maxSlots) takeItem(it);
       else if (!nearItem || d < nearItem.d) nearItem = { it, d };
     }
   }
@@ -692,6 +731,10 @@ function updateHUD() {
   D.lvl.textContent = 'LV ' + S.level + '  —  BEACH #' + S.seed;
   D.weather.textContent = S.weather.name;
   D.scoutHint.classList.toggle('hidden', S.mode === 'scout' || S.level > 1);
+  if (S.invuln > 0) {
+    D.invuln.classList.remove('hidden');
+    D.invuln.textContent = '6 — 7   ' + S.invuln.toFixed(1) + 's';
+  } else D.invuln.classList.add('hidden');
   if (S.combo >= 2) {
     D.combo.classList.remove('hidden');
     D.combo.textContent = 'SOLE TRAIN ×' + S.combo;

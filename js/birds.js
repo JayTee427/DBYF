@@ -732,6 +732,13 @@ export function updateSanderlings(t, waveZ) {
 // ---------------- shared strike resolution ----------------
 function resolveHit(b, runner, stats, radius, heavy) {
   const d = Math.hypot(runner.x - b.x, runner.z - b.z);
+  if (S.invuln > 0 && d < radius) {                 // 6-7 does not negotiate
+    bus.toast('\u{1F522} the gull bounces off you');
+    bus.score(200);
+    AU.thwack();
+    b.state = 'flee'; b.t = 0; b.angle = Math.atan2(b.x - runner.x, b.z - runner.z);
+    return;
+  }
   if (d >= radius) {
     S.stats.dodges++;
     bus.toast('DODGED! +150'); bus.score(150); AU.coin();

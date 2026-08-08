@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import {
   clamp, lerp, smoothstep, damp, angleLerp, mulberry32, seedNoise,
-  toon, meshOf, emojiSprite, faceSprite, Particles, Footprints,
+  toon, meshOf, emojiSprite, labelSprite, faceSprite, Particles, Footprints,
 } from './engine.js';
 import { S, W, HEAT, STAM, DIFFS, effHeat, effAggro, hasItem, footState } from './state.js';
 import { scene, groundY, heatAt, wetness, waveZ, waveEdgeAt, shadeAt, pickWeather, applyWeather, buildScenery, resetTide, rebuildTerrain, WEATHER } from './world.js';
@@ -296,6 +296,19 @@ export class Runner {
     this.armL.rotation.z = panic ? 0.5 : 0.08;
     this.armR.rotation.z = panic ? -0.5 : -0.08;
 
+    // ...unless it's happening, in which case: the gesture. one hand up, one
+    // hand down, back and forth, for as long as it lasts.
+    if (S.invuln > 0) {
+      const w = Math.sin(S.t * 7.5);
+      this.armL.rotation.x = -1.45 - w * 0.85;
+      this.armR.rotation.x = -1.45 + w * 0.85;
+      this.armL.rotation.z = 0.95;
+      this.armR.rotation.z = -0.95;
+      this.rig.rotation.z = w * 0.07;
+      this.headG.rotation.z = -w * 0.12;
+      this.mouth.scale.y = 1 + Math.abs(w) * 2.2;
+    }
+
     // body bob, lean, wobble
     this.squash = damp(this.squash, 1, 9, dt);
     const bob = moving && this.grounded ? Math.abs(Math.sin(ph)) * 0.07 * sp : 0;
@@ -383,11 +396,13 @@ function buildRefuge(type, x, z, rng) {
 function buildItemPickup(key, x, z) {
   const def = ITEMS[key];
   const g = new THREE.Group();
-  const box = meshOf(new THREE.IcosahedronGeometry(0.34, 0), def.tier === 2 ? 0xffd94a : 0xffffff);
+  const rare = (def.rarity || 1) >= 2;
+  const box = meshOf(new THREE.IcosahedronGeometry(0.34, 0), rare ? 0xffd94a : 0xffffff);
   box.position.y = 0.55; g.add(box);
-  const ic = emojiSprite(def.icon, 1.25); ic.position.y = 1.35; g.add(ic);
+  const ic = def.label ? labelSprite(def.label, 1.5) : emojiSprite(def.icon, 1.25);
+  ic.position.y = 1.35; g.add(ic);
   const ring = new THREE.Mesh(new THREE.RingGeometry(0.75, 0.95, 18),
-    new THREE.MeshBasicMaterial({ color: def.tier === 2 ? 0xffd94a : 0xbfe8ff, transparent: true, opacity: 0.5, side: THREE.DoubleSide }));
+    new THREE.MeshBasicMaterial({ color: rare ? 0xffd94a : 0xbfe8ff, transparent: true, opacity: 0.5, side: THREE.DoubleSide }));
   ring.rotation.x = -Math.PI / 2; ring.position.y = 0.06; g.add(ring);
   g.position.set(x, groundY(x, z), z);
   levelGroup.add(g);
@@ -635,7 +650,7 @@ export function generateLevel(runner) {
   S.refuges = []; S.items = []; S.fx = []; S.checkpoints = [];
   clearFlock();
   // attention carries between beaches: the birds remember an interesting person
-  S.combo = 0; S.aggro *= 0.5; S.eagleTimer = 0; S.freeze = 0; S.thiefAt = false;
+  S.combo = 0; S.aggro *= 0.5; S.eagleTimer = 0; S.freeze = 0; S.thiefAt = false; S.invuln = 0;
   if (S.ev) {
     for (const c of S.ev.clouds) scene.remove(c.mesh);
     if (S.ev.focus) scene.remove(S.ev.focus.ring);

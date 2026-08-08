@@ -137,6 +137,12 @@
     font-family:Consolas,monospace;font-size:12px;color:var(--cool);letter-spacing:.12em;
     background:var(--panel);border:2px solid var(--cool);border-radius:3px;padding:4px 12px;opacity:.9}
 
+  #invuln{position:absolute;top:30%;right:26px;font-family:Consolas,monospace;font-weight:bold;
+    font-size:26px;letter-spacing:.14em;color:#fff3b0;background:rgba(140,20,50,.82);
+    border:3px solid var(--gold);border-radius:5px;padding:5px 14px;
+    text-shadow:0 0 16px rgba(255,217,74,.95);animation:sixseven .32s infinite alternate}
+  @keyframes sixseven{from{transform:rotate(-3deg) scale(1)}to{transform:rotate(3deg) scale(1.07)}}
+
   #combo{position:absolute;top:38%;right:26px;font-family:Consolas,monospace;font-weight:bold;
     color:var(--cool);letter-spacing:.1em;text-shadow:2px 2px 0 rgba(0,0,0,.85),0 0 18px rgba(95,224,208,.75);
     animation:pop .35s ease-out}
@@ -261,6 +267,7 @@
     <div class="slot empty" id="s2"><span class="e">empty</span></div>
   </div>
 
+  <div id="invuln" class="hidden">6 — 7</div>
   <div id="combo" class="hidden">SOLE TRAIN ×2</div>
   <div id="syn" class="hidden"></div>
   <div id="ability" class="hidden"></div>
@@ -305,6 +312,6 @@
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js" } }
 </script>
-<script type="module" src="js/main.js?v=2.1.0"></script>
+<script type="module" src="js/main.js?v=2.2.0"></script>
 </body>
 </html>

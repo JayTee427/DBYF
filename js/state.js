@@ -50,6 +50,7 @@ export const S = {
   score: 0, levelBanked: 0,
   combo: 0, comboT: 0,
   maxSlots: 3, eagleTimer: 0, nextGullAt: 0, freeze: 0,
+  invuln: 0, invulnMax: 0, lastChant: 0,
   stats: null,
   refuges: [], items: [], birds: [], props: [], fx: [], checkpoints: [],
   ev: null,

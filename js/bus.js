@@ -7,5 +7,6 @@ export const bus = {
   score: () => { },
   banner: () => { },
   shake: () => { },
+  instant: () => { },
 };
 export function wireBus(handlers) { Object.assign(bus, handlers); }

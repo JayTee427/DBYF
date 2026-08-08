@@ -53,6 +53,7 @@ Items are **permanent for the whole run**. They stack, they combine, and losing 
 - **Three slots, FIFO.** With a free slot you pick things up automatically; with a full build you must press **F** to swap, so the choice is yours.
 - **Synergies** fire when a build comes together — THE CAPTAIN (pirate hat + boots: the gulls salute), FULLY INSULATED, SEA LEGS, SCRAPPER, BEACHCOMBER, THE BOUNCER.
 - **Cursed items are real gambles.** The corn dog makes you fast and delicious. The cursed sand dollar showers you in loot and makes the Sun hate you personally. The old tuna can summons the bald eagle, who may hand you a treasure or carry you off.
+- **6-7.** Very rare. Doesn't take a slot — you just pick it up and it happens. For a random 2–6 seconds you are completely invincible: the lava does nothing, your health can't drop, and diving gulls bounce off you. Your character puts one hand up and one hand down, over and over, chanting "six seven" the entire time. Nobody knows why it works.
 
 ## The birds
 
