@@ -583,11 +583,56 @@ export function updateEvents(dt, runner) {
 }
 
 // ============================================================
+// CHECKPOINTS — a long beach needs staging posts
+// ============================================================
+function buildCheckpoint(x, z, idx) {
+  const g = new THREE.Group();
+  for (const [lx, lz] of [[-1.9, -1.5], [1.9, -1.5], [-1.9, 1.5], [1.9, 1.5]]) {
+    const post = meshOf(new THREE.CylinderGeometry(0.11, 0.11, 2.9, 6), 0xd9c9a8);
+    post.position.set(lx, 1.45, lz); g.add(post);
+  }
+  const canopy = meshOf(new THREE.BoxGeometry(4.6, 0.22, 3.8), 0x35b5a0);
+  canopy.position.y = 2.95; g.add(canopy);
+  const stripe = meshOf(new THREE.BoxGeometry(4.65, 0.1, 0.9), 0xfff1c9, { outline: false });
+  stripe.position.y = 3.1; g.add(stripe);
+  const cooler = meshOf(new THREE.BoxGeometry(1.2, 0.8, 0.8), 0x2288cc);
+  cooler.position.set(1.2, 0.4, -0.9); g.add(cooler);
+  const mat = meshOf(new THREE.BoxGeometry(3.4, 0.14, 2.4), 0xffe07a);
+  mat.position.y = 0.07; g.add(mat);
+  const flag = emojiSprite('\u{26FA}', 2.0);
+  flag.material.fog = false; flag.material.depthTest = false; flag.renderOrder = 890;
+  flag.position.y = 5.6; g.add(flag);
+  g.position.set(x, groundY(x, z), z);
+  levelGroup.add(g);
+  // it also works as a refuge you can stand on
+  S.refuges.push({ x, z, r: 4.2, h: 0.2, type: 'wood', mesh: g, crab: false, crabSprung: false, used: true });
+  return { x, z, idx, mesh: g, taken: false };
+}
+export function checkCheckpoints(runner) {
+  for (const cp of S.checkpoints) {
+    if (cp.taken) continue;
+    if (Math.hypot(runner.x - cp.x, runner.z - cp.z) > 7) continue;
+    cp.taken = true;
+    S.feet.L = 0; S.feet.R = 0;
+    S.stamina = STAM.max;
+    S.health = Math.min(100, S.health + 12);
+    const bonus = 400;
+    toast('\u{26FA} CHECKPOINT ' + (cp.idx + 1) + '/' + S.checkpoints.length +
+          ' — feet cooled  +' + bonus);
+    addScore(bonus);
+    AU.fanfare();
+    say(['oh thank god.', 'shade. blessed shade.', 'five minutes. just five minutes.'][cp.idx % 3], true);
+    particles.burst(cp.x, groundY(cp.x, cp.z) + 1.2, cp.z, 16,
+      { color: 0x8affc1, size: 0.36, ttl: 0.9, vy: 2.4, spread: 2.6 });
+  }
+}
+
+// ============================================================
 // LEVEL GENERATION — routes with real trade-offs
 // ============================================================
 export function generateLevel(runner) {
   while (levelGroup.children.length) levelGroup.remove(levelGroup.children[0]);
-  S.refuges = []; S.items = []; S.fx = [];
+  S.refuges = []; S.items = []; S.fx = []; S.checkpoints = [];
   clearFlock();
   // attention carries between beaches: the birds remember an interesting person
   S.combo = 0; S.aggro *= 0.5; S.eagleTimer = 0; S.freeze = 0; S.thiefAt = false;
@@ -646,7 +691,7 @@ export function generateLevel(runner) {
   const lootMul = S.diff.loot * buildStats().loot;
   const spine = S.refuges.filter(r => r.x > W.startX + 6);
   for (const r of spine) {
-    if (rng() > 0.55 * lootMul) continue;
+    if (rng() > 0.22 * lootMul) continue;
     // sat right on the refuge: reaching safety and kitting out are the same move
     const a = rng() * Math.PI * 2;
     const ix = clamp(r.x + Math.cos(a) * rng() * 1.2, W.xMin, W.goalX - 6);
@@ -655,10 +700,23 @@ export function generateLevel(runner) {
     it.mesh.position.y += r.h;                      // sit on top of the driftwood
     S.items.push(it);
   }
-  let dx = W.startX + 16;
+  let dx = W.startX + 24;
   while (dx < W.goalX - 10) {                       // risky dune caches
-    dx += 18 + rng() * 14;
+    dx += 46 + rng() * 26;
     S.items.push(buildItemPickup(rollItem(rng, true), dx, 19 + rng() * 8));
+  }
+
+  // ---- staging posts: the beach becomes three legs, not one long jog
+  const legs = 4;
+  for (let i = 1; i < legs; i++) {
+    const cx = lerp(W.startX, W.goalX, i / legs);
+    // sit it near whichever refuge is closest so it lands on the natural route
+    // sit it right on the spine so following the route always hits it
+    let near = null, bd = 1e9;
+    for (const r of S.refuges) { const d = Math.abs(r.x - cx); if (d < bd) { bd = d; near = r; } }
+    const px = near ? near.x : cx;
+    const cz = clamp(near ? near.z : 8, -2, 22);
+    S.checkpoints.push(buildCheckpoint(px, cz, i - 1));
   }
   // a plover works this beach from level 3 on, running its little con
   if (S.level >= 3 && rng() < 0.55) spawnPlover(runner);

@@ -11,12 +11,13 @@ export const DIFFS = {
   august:     { label: 'BAREFOOT IN AUGUST', heat: 1.65, aggro: 2.00, loot: 0.65, mult: 4.2, birdDmg: 18, stam: 0.75, lava: 1.60 },
 };
 
-// world bounds — a short, snappy arcade run, not a hike
+// World bounds. A beach is a proper journey — long enough that your build has
+// time to come together, break, and get rebuilt before you reach the end.
 export const W = {
-  xMin: -105, xMax: 105,
+  xMin: -272, xMax: 272,
   zOcean: -26, zMin: -17, zMax: 32,
-  startX: -58, startZ: 4,
-  goalX: 58,
+  startX: -252, startZ: 4,
+  goalX: 252,
 };
 
 // heat tuning
@@ -50,7 +51,7 @@ export const S = {
   combo: 0, comboT: 0,
   maxSlots: 3, eagleTimer: 0, nextGullAt: 0, freeze: 0,
   stats: null,
-  refuges: [], items: [], birds: [], props: [], fx: [],
+  refuges: [], items: [], birds: [], props: [], fx: [], checkpoints: [],
   ev: null,
   tutorial: 0,
   lastVoice: 0, lastNag: 0, lastSqueak: 0,

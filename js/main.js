@@ -12,7 +12,8 @@ import {
   paintSand, updateHaze, faceHaze, sunSprite, WEATHER,
 } from './world.js';
 import {
-  Runner, GOALS, generateLevel, updateEvents, particles, prints, wire, levelGroup,
+  Runner, GOALS, generateLevel, updateEvents, checkCheckpoints,
+  particles, prints, wire, levelGroup,
 } from './actors.js';
 import {
   ITEMS, SYNERGIES, buildStats, activeSynergies, grant, removeItem, findItem,
@@ -328,7 +329,7 @@ function levelComplete() {
   const lines = [];
   let sc = 2000; lines.push(['REACHED THE GOAL', '+2000']);
   if (S.goal.key === 'nursery') { sc += 1200; lines.push(['⭐ SEAL APPROVAL', '+1200']); }
-  const tb = Math.max(0, Math.round((120 - S.levelTime) * 18));
+  const tb = Math.max(0, Math.round((260 - S.levelTime) * 14));
   if (tb) { sc += tb; lines.push(['SPEED BONUS', '+' + tb]); }
   if (S.slots.length === 3) { sc += 300; lines.push(['FULL POUCH', '+300']); }
   if (hasItem('duck')) { sc += 600; lines.push(['DUCK LOYALIST', '+600']); }
@@ -601,6 +602,7 @@ function simulate(dt) {
   updateBirds(dt, runner, S.freeze > 0);
   if (S.freeze <= 0) updateEvents(dt, runner);
   tickCooldowns(dt);
+  checkCheckpoints(runner);
   // charging through loiterers scatters them — you're not helpless
   if (runner.speed > 8.5) scatterAt(runner.x, runner.z, 2.4, false);
 

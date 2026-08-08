@@ -136,7 +136,7 @@ export function heatAt(x, z, t) {
 }
 
 // ---------------- sand mesh ----------------
-const SAND_W = 240, SAND_D = 62, SEG_X = 168, SEG_Z = 52;
+const SAND_W = 580, SAND_D = 62, SEG_X = 224, SEG_Z = 44;
 const sandGeo = new THREE.PlaneGeometry(SAND_W, SAND_D, SEG_X, SEG_Z);
 sandGeo.rotateX(-Math.PI / 2);
 sandGeo.translate(0, 0, (W.zMin + W.zMax) / 2 + 1);
@@ -193,7 +193,7 @@ export function paintSand(t) {
 export function waveEdgeAt(x, t) {
   return waveZ + Math.sin(x * 0.125 + t * 1.7) * 0.85 + Math.sin(x * 0.043 - t * 1.1) * 0.5;
 }
-const STRIP_SEG = 90, STRIP_X0 = -140, STRIP_X1 = 140;
+const STRIP_SEG = 150, STRIP_X0 = -292, STRIP_X1 = 292;
 /** A band that follows the wavy shoreline: near edge and far edge per column. */
 function strip(color, opacity, order) {
   const g = new THREE.BufferGeometry();
@@ -227,7 +227,7 @@ const wash = strip(0x9fe8f4, 0.5, 4);
 const foam = strip(0xffffff, 0.92, 5);
 
 // rolling swell out past the break so the sea has motion
-const swellGeo = new THREE.PlaneGeometry(300, 46, 70, 12);
+const swellGeo = new THREE.PlaneGeometry(640, 46, 96, 12);
 swellGeo.rotateX(-Math.PI / 2);
 const swell = new THREE.Mesh(swellGeo, toon(0x2a86b8));
 swell.position.set(0, -0.9, -48);
@@ -393,9 +393,9 @@ export function applyWeather(wx) {
 }
 export function buildScenery(rng) {
   while (sceneryGroup.children.length) sceneryGroup.remove(sceneryGroup.children[0]);
-  for (let i = 0; i < 44; i++) sceneryGroup.add(duneGrass(W.xMin + rng() * (W.xMax - W.xMin), 24 + rng() * 7, rng));
-  for (let i = 0; i < 6; i++) sceneryGroup.add(palm(W.xMin + 10 + rng() * (W.xMax - W.xMin - 20), 27 + rng() * 4, rng));
-  sceneryGroup.add(lifeguardTower(-30 + rng() * 60, 21 + rng() * 3));
+  for (let i = 0; i < 110; i++) sceneryGroup.add(duneGrass(W.xMin + rng() * (W.xMax - W.xMin), 24 + rng() * 7, rng));
+  for (let i = 0; i < 18; i++) sceneryGroup.add(palm(W.xMin + 10 + rng() * (W.xMax - W.xMin - 20), 27 + rng() * 4, rng));
+  for (let i = 0; i < 4; i++) sceneryGroup.add(lifeguardTower(W.xMin + 40 + rng() * (W.xMax - W.xMin - 80), 21 + rng() * 3));
 }
 export function resetTide() { wetAt.fill(-999); }
 export function rebuildTerrain() { refreshSandHeights(); }

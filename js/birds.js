@@ -16,32 +16,145 @@ export const flock = [];
 const MAX_BIRDS = 14;
 
 // ---------------- meshes ----------------
+/** a tapered wing outline, not a plank */
+function wingShape(len, root, mid, tipW) {
+  const s = new THREE.Shape();
+  s.moveTo(0, root);
+  s.quadraticCurveTo(len * 0.45, mid, len, tipW);
+  s.lineTo(len, -tipW * 0.6);
+  s.quadraticCurveTo(len * 0.45, -mid * 0.75, 0, -root);
+  s.closePath();
+  return new THREE.ShapeGeometry(s, 8);
+}
 function birdMesh(opts) {
   const { body = 0xf7f7f2, wing = 0x8e9aa6, tip = 0x2c2c34, beak = 0xffa33d, head = 0xffffff, scale = 1 } = opts || {};
   const g = new THREE.Group();
-  const b = meshOf(new THREE.CapsuleGeometry(0.3, 0.66, 4, 8), body);
-  b.rotation.x = Math.PI / 2; g.add(b);
-  const h = meshOf(new THREE.SphereGeometry(0.27, 8, 8), head); h.position.z = 0.58; g.add(h);
-  const bk = meshOf(new THREE.ConeGeometry(0.1, 0.4, 5), beak, { outlineScale: 1.25 });
-  bk.rotation.x = Math.PI / 2; bk.position.z = 0.94; g.add(bk);
-  // grey wings with dark tips read against pale sand from a long way off
+  const b = meshOf(new THREE.CapsuleGeometry(0.26, 0.52, 4, 8), body);
+  b.rotation.x = Math.PI / 2; b.scale.set(1, 0.92, 1); g.add(b);
+  const h = meshOf(new THREE.SphereGeometry(0.2, 8, 8), head); h.position.set(0, 0.14, 0.44); g.add(h);
+  const bk = meshOf(new THREE.ConeGeometry(0.07, 0.3, 5), beak, { outlineScale: 1.3 });
+  bk.rotation.x = Math.PI / 2; bk.position.set(0, 0.12, 0.68); g.add(bk);
+
   const wm = toon(wing); wm.side = THREE.DoubleSide;
   const tm = toon(tip); tm.side = THREE.DoubleSide;
   const mkWing = (side) => {
     const w = new THREE.Group();
-    const inner = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 0.5), wm);
-    inner.position.x = side * 0.58; w.add(inner);
-    const outer = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.4), tm);
-    outer.position.x = side * 1.42; w.add(outer);
+    w.position.set(side * 0.18, 0.1, 0.02);
+    const span = new THREE.Mesh(wingShape(0.92, 0.2, 0.3, 0.07), wm);
+    span.rotation.x = -Math.PI / 2;
+    span.scale.x = side;
+    w.add(span);
+    const dark = new THREE.Mesh(wingShape(0.34, 0.09, 0.11, 0.05), tm);   // dark primaries
+    dark.rotation.x = -Math.PI / 2;
+    dark.position.x = side * 0.9; dark.scale.x = side; dark.position.y = 0.002;
+    w.add(dark);
+    // the small folded shape shown when it's standing about
+    const tucked = new THREE.Mesh(wingShape(0.42, 0.13, 0.15, 0.05), wm);
+    tucked.rotation.set(-Math.PI / 2, 0, side * 0.25);
+    tucked.position.set(side * 0.06, -0.02, -0.16);
+    tucked.scale.x = side; tucked.visible = false;
+    w.add(tucked);
+    w.userData = { side, span, dark, tucked };
     g.add(w); return w;
   };
   const w1 = mkWing(-1), w2 = mkWing(1);
-  const legs = meshOf(new THREE.CylinderGeometry(0.045, 0.045, 0.38, 4), 0xf0a04a, { outline: false });
-  legs.position.y = -0.36; g.add(legs);
-  g.userData.wings = [w1, w2];
-  g.userData.legs = legs;
-  g.scale.setScalar(scale * 1.45);
+  const tail = new THREE.Mesh(wingShape(0.3, 0.11, 0.13, 0.09), tm);
+  tail.rotation.x = -Math.PI / 2; tail.rotation.z = Math.PI / 2;
+  tail.position.z = -0.44; g.add(tail);
+  const legs = meshOf(new THREE.CylinderGeometry(0.035, 0.035, 0.3, 4), 0xf0a04a, { outline: false });
+  legs.position.y = -0.3; g.add(legs);
+  g.userData = { wings: [w1, w2], legs, head: h, tail, body: b };
+  // a western gull is ~0.6m long, not the size of a labrador
+  g.scale.setScalar(scale * 0.62);
   return g;
+}
+
+// ---------------- believable bird motion ----------------
+/** wings beating; 0 = glide, 1 = hard flap */
+function flap(b, power = 1) {
+  const u = b.mesh.userData;
+  const s = Math.sin(S.t * (9 + power * 9) + b.hop);
+  for (const w of u.wings) {
+    const side = w.userData.side;
+    w.rotation.y = 0;
+    w.rotation.z = side * (0.12 + s * 0.85 * power);
+    w.scale.x = 1;
+  }
+  u.legs.visible = false;
+  u.tail.rotation.x = -Math.PI / 2 + 0.15;
+}
+/** wings folded against the body — how a bird actually stands */
+function fold(b) {
+  const u = b.mesh.userData;
+  for (const w of u.wings) {
+    const side = w.userData.side;
+    w.rotation.z = side * 0.06;
+    w.rotation.y = side * 1.32;          // swept back along the flank
+    w.scale.x = 0.62;
+  }
+  u.legs.visible = true;
+  u.tail.rotation.x = -Math.PI / 2 - 0.1;
+}
+/** spread + flare, the moment before touchdown */
+function flare(b, k) {
+  const u = b.mesh.userData;
+  for (const w of u.wings) {
+    const side = w.userData.side;
+    w.rotation.y = 0;
+    w.rotation.z = side * (0.5 + 0.4 * Math.sin(S.t * 22));
+    w.scale.x = 1;
+  }
+  u.legs.visible = true;
+  b.mesh.rotation.x = -0.5 * k;          // pitch up to brake
+  u.tail.rotation.x = -Math.PI / 2 - 0.5 * k;
+}
+/**
+ * Ground life: a continuous waddle with the head-thrust gulls actually do,
+ * plus idle preening and looking about, so they never read as furniture.
+ */
+function groundAnim(b, dt, walking) {
+  const u = b.mesh.userData;
+  fold(b);
+  b.walkPhase = (b.walkPhase || 0) + dt * (walking ? 11 : 0);
+  const step = Math.sin(b.walkPhase);
+  if (walking) {
+    b.mesh.rotation.z = step * 0.10;                     // waddle roll
+    b.mesh.position.y += Math.abs(step) * 0.03;
+    u.head.position.z = 0.58 + Math.sin(b.walkPhase * 2) * 0.07;   // head thrust
+    u.head.position.y = Math.abs(step) * -0.02;
+    u.legs.rotation.x = step * 0.5;
+  } else {
+    b.mesh.rotation.z = damp(b.mesh.rotation.z, 0, 6, dt);
+    u.legs.rotation.x = 0;
+    // idle business: preen, glance around, or a small settle
+    b.idleT = (b.idleT || 0) - dt;
+    if (b.idleT <= 0) {
+      b.idleT = 1.2 + Math.random() * 2.4;
+      b.idleAct = Math.random();
+    }
+    if (b.idleAct < 0.34) {                              // preen a flank
+      const k = Math.max(0, Math.sin(b.idleT * 3.2));
+      u.head.position.y = -0.22 * k;
+      u.head.position.z = 0.58 - 0.3 * k;
+      u.head.rotation.z = 0.7 * k;
+    } else if (b.idleAct < 0.62) {                       // glance around
+      u.head.rotation.y = Math.sin(S.t * 1.7 + b.hop) * 0.7;
+      u.head.position.set(0, 0, 0.58);
+      u.head.rotation.z = 0;
+    } else {                                             // settle / breathe
+      u.head.position.set(0, Math.sin(S.t * 2 + b.hop) * 0.015, 0.58);
+      u.head.rotation.set(0, 0, 0);
+    }
+  }
+}
+/** bank into a turn like something with wings would */
+function bank(b, targetYaw, dt) {
+  const prev = b._yaw ?? targetYaw;
+  let d = ((targetYaw - prev + Math.PI) % (Math.PI * 2)) - Math.PI;
+  if (d < -Math.PI) d += Math.PI * 2;
+  b._yaw = prev + d * Math.min(1, dt * 5);
+  b.mesh.rotation.y = b._yaw;
+  b.mesh.rotation.z = damp(b.mesh.rotation.z || 0, clamp(-d * 6, -0.8, 0.8), 6, dt);
 }
 /** every bird gets a little ground shadow so you can always place it */
 function groundBlob(r) {
@@ -94,27 +207,32 @@ function desiredGulls() {
   if (S.eagleTimer > 0) return 0;                 // nobody argues with the eagle
   return Math.min(8, Math.floor(S.aggro / 12));
 }
-function gullsWatching() { return flock.filter(b => b.kind === 'gull' && b.state === 'watch').length; }
+const AIRBORNE = ['circle', 'swoop', 'join', 'peel'];
+function gullsWatching() { return flock.filter(b => b.kind === 'gull' && AIRBORNE.includes(b.state)).length; }
 
+/** A gull joins the wheeling mob overhead. They never walk at you — the
+ *  pressure comes from the sky, which is both how gulls behave and far
+ *  more threatening to look up at. */
 function spawnLandingGull(runner) {
   const ang = Math.random() * Math.PI * 2;
-  const r = 13 + Math.random() * 9;
-  const lx = clamp(runner.x + Math.cos(ang) * r, W.xMin, W.xMax);
-  const lz = clamp(runner.z + Math.sin(ang) * r, W.zMin + 1, W.zMax - 2);
-  const b = addBird('gull', lx - 16, lz - 14, 12 + Math.random() * 5, 'flyin');
+  const b = addBird('gull', runner.x + Math.cos(ang) * 34, runner.z + Math.sin(ang) * 34,
+    14 + Math.random() * 8, 'join');
   if (!b) return;
-  b.tgt = { x: lx, z: lz };
-  b.dur = 1.4 + Math.random() * 0.6;
+  b.angle = ang;
+  b.orbitR = 5.5 + Math.random() * 7;             // each holds its own lane
+  b.alt = 4.5 + Math.random() * 5.5;
+  b.orbitSpeed = (0.5 + Math.random() * 0.5) * (Math.random() < 0.5 ? 1 : -1);
+  b.swoopAt = S.t + 4 + Math.random() * 7;
   if (Math.random() < 0.4) AU.gullCall();
 }
 
 /** The raid: everything that has gathered takes off at once. */
 function launchRaid(runner) {
-  const watchers = flock.filter(b => b.kind === 'gull' && b.state === 'watch');
+  const watchers = flock.filter(b => b.kind === 'gull' && AIRBORNE.includes(b.state));
   if (!watchers.length) return;
   watchers.forEach((b, i) => {
-    b.state = 'takeoff';
-    b.t = -i * 0.28;                              // staggered so you can react
+    b.state = 'peel';
+    b.peelIn = i * 0.45;                          // they come off the wheel one by one
     const lead = 0.35 + i * 0.06;
     b.strike = {
       x: clamp(runner.x + Math.sin(runner.facing) * runner.speed * lead + (Math.random() - 0.5) * 3, W.xMin, W.xMax),
@@ -172,7 +290,7 @@ export function scatterAt(x, z, radius, forceful) {
     const d = Math.hypot(b.x - x, b.z - z);
     if (d > radius) continue;
     if (b.carry) { recoverFrom(b); n++; continue; }
-    if (b.state === 'watch' || b.state === 'flyin' || forceful) {
+    if (AIRBORNE.includes(b.state) || forceful) {
       b.state = 'flee'; b.t = 0; b.scared = 1;
       n++;
     }
@@ -245,7 +363,7 @@ export function updateBirds(dt, runner, frozen) {
   // keep the loitering flock topped up to match how interesting you are
   if (!frozen && S.mode === 'play') {
     const want = desiredGulls();
-    const have = flock.filter(b => b.kind === 'gull' && (b.state === 'watch' || b.state === 'flyin')).length;
+    const have = flock.filter(b => b.kind === 'gull' && AIRBORNE.includes(b.state)).length;
     if (have < want && S.t > (S.nextGullAt || 0)) {
       S.nextGullAt = S.t + 0.7 + Math.random() * 0.9;
       spawnLandingGull(runner);
@@ -278,22 +396,9 @@ export function updateBirds(dt, runner, frozen) {
     }
   }
 }
-function flapIdle(b, dt) {
-  const f = Math.sin(S.t * 16 + b.hop) * 0.7;
-  b.mesh.userData.wings[0].rotation.y = f;
-  b.mesh.userData.wings[1].rotation.y = -f;
-}
-function flapFly(b) {
-  const f = Math.sin(S.t * 20 + b.hop) * 0.85;
-  b.mesh.userData.wings[0].rotation.y = f;
-  b.mesh.userData.wings[1].rotation.y = -f;
-  b.mesh.userData.legs.visible = false;
-}
-function standStill(b) {
-  b.mesh.userData.wings[0].rotation.y = 0.1;
-  b.mesh.userData.wings[1].rotation.y = -0.1;
-  b.mesh.userData.legs.visible = true;
-}
+function flapIdle(b, dt) { flap(b, 0.12); }
+function flapFly(b) { flap(b, 1); }
+function standStill(b) { fold(b); }
 function face(b, tx, tz) {
   b.mesh.rotation.y = Math.atan2(tx - b.x, tz - b.z);
 }
@@ -301,44 +406,69 @@ function face(b, tx, tz) {
 // ---- western gull: land, watch, creep closer, raid ----
 function updateGull(b, dt, runner, stats) {
   const gy = groundY(b.x, b.z);
-  if (b.state === 'flyin') {
-    const k = clamp(b.t / b.dur, 0, 1);
-    b.x = lerp(b.x, b.tgt.x, 1 - Math.exp(-4 * dt));
-    b.z = lerp(b.z, b.tgt.z, 1 - Math.exp(-4 * dt));
-    b.y = lerp(b.y, groundY(b.tgt.x, b.tgt.z) + 0.34, 1 - Math.exp(-3.2 * dt));
-    flapFly(b); face(b, b.tgt.x, b.tgt.z);
-    if (k >= 1) { b.state = 'watch'; b.t = 0; }
+  if (b.state === 'join') {
+    // slide into the wheel
+    const tx = runner.x + Math.cos(b.angle) * b.orbitR;
+    const tz = runner.z + Math.sin(b.angle) * b.orbitR;
+    const ty = runner.y + b.alt;
+    b.x = damp(b.x, tx, 1.6, dt);
+    b.z = damp(b.z, tz, 1.6, dt);
+    b.y = damp(b.y, ty, 1.8, dt);
+    flap(b, 0.85);
+    bank(b, Math.atan2(tx - b.x, tz - b.z), dt);
+    if (Math.hypot(b.x - tx, b.z - tz) < 3) { b.state = 'circle'; b.t = 0; }
 
-  } else if (b.state === 'watch') {
-    b.y = damp(b.y, gy + 0.34, 10, dt);
-    standStill(b);
-    face(b, runner.x, runner.z);
-    // they edge in, hop by hop. the closer they are, the sooner it starts.
-    const d = Math.hypot(runner.x - b.x, runner.z - b.z);
-    if (d > 4.5 && b.t > 0.9) {
-      b.t = 0;
-      const step = 0.9 + Math.random() * 0.8;
-      b.x += (runner.x - b.x) / d * step;
-      b.z += (runner.z - b.z) / d * step;
-      b.hopUntil = S.t + 0.22;
-    }
-    if (S.t < (b.hopUntil || 0)) b.y = gy + 0.34 + Math.sin((b.hopUntil - S.t) * 14) * 0.16;
-    // charging through a loitering gull scatters it — real agency
-    if (d < 2.0 && runner.speed > 7.5) {
-      b.state = 'flee'; b.t = 0;
-      S.aggro = Math.max(0, S.aggro - 10);
-      bus.toast('SHOOED! +80'); bus.score(80); AU.gullCall();
+  } else if (b.state === 'circle') {
+    // wheeling overhead: the mob you can watch growing above your head
+    b.angle += b.orbitSpeed * dt;
+    const tx = runner.x + Math.cos(b.angle) * b.orbitR;
+    const tz = runner.z + Math.sin(b.angle) * b.orbitR;
+    const ty = runner.y + b.alt + Math.sin(S.t * 0.9 + b.hop) * 0.7;
+    const px = b.x, pz = b.z;
+    b.x = damp(b.x, tx, 3.4, dt);
+    b.z = damp(b.z, tz, 3.4, dt);
+    b.y = damp(b.y, ty, 2.2, dt);
+    bank(b, Math.atan2(b.x - px, b.z - pz), dt);
+    // gulls mostly glide on a thermal and only beat now and then
+    flap(b, 0.18 + 0.32 * Math.max(0, Math.sin(S.t * 0.7 + b.hop)));
+    if (S.t > b.swoopAt) {                       // a warning pass
+      b.state = 'swoop'; b.t = 0;
+      b.from = { x: b.x, y: b.y, z: b.z };
+      b.swoopAt = S.t + 6 + Math.random() * 8;
+      if (Math.random() < 0.5) AU.gullCall();
     }
 
-  } else if (b.state === 'takeoff') {
-    if (b.t < 0) { standStill(b); return; }          // staggered start
-    flapFly(b);
-    b.y = damp(b.y, gy + 7, 6, dt);
+  } else if (b.state === 'swoop') {
+    // dives past you at head height, then climbs back to the wheel
+    const k = clamp(b.t / 1.5, 0, 1);
+    const low = Math.sin(k * Math.PI);
+    const tx = runner.x + Math.cos(b.angle + k * 2.6) * lerp(b.orbitR, 2.4, low);
+    const tz = runner.z + Math.sin(b.angle + k * 2.6) * lerp(b.orbitR, 2.4, low);
+    const px = b.x, pz = b.z;
+    b.x = damp(b.x, tx, 7, dt);
+    b.z = damp(b.z, tz, 7, dt);
+    b.y = damp(b.y, runner.y + lerp(b.alt, 1.5, low), 6, dt);
+    bank(b, Math.atan2(b.x - px, b.z - pz), dt);
+    flap(b, low > 0.5 ? 0.15 : 1);               // tuck and glide through the pass
+    if (k >= 1) { b.angle += 2.6; b.state = 'circle'; b.t = 0; }
+
+  } else if (b.state === 'peel') {
+    // holds the wheel, wings back, until its turn comes
+    b.peelIn -= dt;
+    b.angle += b.orbitSpeed * dt;
+    const tx = runner.x + Math.cos(b.angle) * b.orbitR;
+    const tz = runner.z + Math.sin(b.angle) * b.orbitR;
+    const px = b.x, pz = b.z;
+    b.x = damp(b.x, tx, 3.4, dt);
+    b.z = damp(b.z, tz, 3.4, dt);
+    b.y = damp(b.y, runner.y + b.alt, 2.2, dt);
+    bank(b, Math.atan2(b.x - px, b.z - pz), dt);
+    flap(b, 1);
     if (b.shadow) {
       b.shadow.position.set(b.strike.x, groundY(b.strike.x, b.strike.z) + 0.06, b.strike.z);
-      b.shadow.material.opacity = 0.2 + 0.25 * Math.abs(Math.sin(S.t * 14));
+      b.shadow.material.opacity = 0.18 + 0.24 * Math.abs(Math.sin(S.t * 12));
     }
-    if (b.t > 0.75) { b.state = 'dive'; b.t = 0; b.from = { x: b.x, y: b.y, z: b.z }; }
+    if (b.peelIn <= 0) { b.state = 'dive'; b.t = 0; b.from = { x: b.x, y: b.y, z: b.z }; }
 
   } else if (b.state === 'dive') {
     const k = clamp(b.t / 0.55, 0, 1);
