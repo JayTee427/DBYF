@@ -7,7 +7,7 @@ and what's left. Keep it current when things land.
 
 ## Where we are
 
-**v3.0** — **sections A and B complete**. Playable end to end. Third-person runner, endless escalating beaches,
+**v3.4** — sections A and B complete, C1 (set pieces) done. Playable end to end. Third-person runner, endless escalating beaches,
 permanent roguelike builds, a living bird flock, arcade scoring.
 
 ### Built and working
@@ -179,10 +179,19 @@ shoes held over her head, waving. You have ~26 seconds to reach her.
 
 ## C. Structure & replay
 
-- [ ] **C1. Hand-authored set-piece chunks** stitched procedurally instead of pure
-      noise — driftwood boardwalk over a lava lake, sandcastle maze, the pier,
-      a crowded towel-hopping stretch. This is what would make beaches *memorable*
-      rather than merely different, and it's the highest-value item in C.
+- [x] **C1. Hand-authored set pieces** *(v3.4)* — 2–3 authored chunks are stitched
+      into every beach, spaced along it, using a new **hotPad** system that lets a
+      chunk force its own scorching ground (and culls any procedural refuge that
+      lands inside, so you can't stroll around the challenge).
+      - **THE BOARDWALK** — a 17m lava lake with seven rickety planks across it,
+        gaps 5–6m. Measured: 1.12 heat at the centre, 0.10 outside.
+      - **THE SANDCASTLE KINGDOM** — a scorched block with a winding lane of packed
+        cool sand cut through it, flanked by towers. Lane reads 0.05–0.51 against
+        0.81–1.27 either side.
+      - **THE OLD PIER** — an 11-section elevated deck with railings and pilings,
+        running out toward the sea, with baking ground on both sides.
+      - **THE TOWEL VILLAGE** — someone's entire extended family. Cool towels
+        everywhere, and 45% of them have a crab in them.
 - [ ] **C2. Sun pressure** — the whole beach heats as the level runs, so dawdling
       always loses and cutting a corner through lava becomes a real decision
 - [ ] **C3. Daily seed** + shareable beach codes ("beach #48213 nearly killed me")
@@ -191,6 +200,67 @@ shoes held over her head, waving. You have ~26 seconds to reach her.
 - [ ] **C6. Boardwalk stairs** goal (the asphalt gauntlet) — the 7th goal, designed but unbuilt
 
 ---
+
+---
+
+# IDEAS — the running list of what could still make it better
+
+Ordered by how much I think each would actually improve the game. Detailed
+enough to pick up cold.
+
+## 1. Meta-progression (the biggest remaining gap)
+Nothing carries between runs, which is the one place this still isn't really a
+roguelike. Runs end and nothing changes.
+- **Unlock pool.** Start with ~15 items in the spawn table; milestones add the
+  rest ("clear 5 beaches" → spinach; "chase down 10 stolen items" → the net;
+  "meet 20 towel crabs" → the hermit crab). Doubles as onboarding — a new player
+  isn't handed 40 items and 12 abilities at once.
+- **Persistent stat wall** on the title screen: total beaches, faceplants,
+  crabs met, times she saved you. Cheap, and it makes the Hall of Soles feel
+  like a place.
+- Store alongside `scores.json` (same static-file read, same merge).
+
+## 2. Onboarding & a codex
+40 items, 20 events, 12 abilities, 9 birds. Seven tutorial toasts is not enough,
+and there's no way to check what anything does mid-run.
+- Pause screen (Esc) lists your build with full descriptions and cooldowns.
+- A "what is all this" page off the title screen.
+- First-time-only toasts: the first gull raid, first chest, first synergy.
+
+## 3. Goals need different verbs
+All nine are "touch this spot," which makes them reskins.
+- **Shower**: stand under it 3 seconds — the birds get a free run at you.
+- **Seal nursery**: approach *slowly* or the pups scatter and you have to wait.
+- **Tide pools**: arrive while the tide is OUT, so it's timing, not distance.
+- **Boardwalk stairs** (designed, never built): the asphalt gauntlet.
+
+## 4. Sun pressure (design bible, section C)
+The whole beach heats as the level runs, so dawdling always loses and cutting a
+corner through lava becomes a live decision rather than never worth it. Probably
+a global multiplier on `effHeat()` ramping with `S.levelTime`, plus the sky
+shifting toward white.
+
+## 5. Daily seed + shareable beach codes
+"BEACH #48213 nearly killed me." Seed the whole run from a date string, put the
+seed on the report card, and let a seed be typed in. Wordle-shaped virality for
+almost no work — the generator is already fully seeded.
+
+## 6. More set pieces
+The chunk system (v3.4) makes these cheap now — each is one function.
+- **The lifeguard tower climb** — go up, get a free full-beach scout, gulls nest up there.
+- **The volleyball court** — roped, flat, cool, with a live game you get hit by.
+- **The storm drain** — a cool concrete channel running to the sea, and something lives in it.
+- **The rock jetty** — a long spine of boulders out into the water, cool but total bird exposure.
+- **The bonfire pit** — last night's fire, still hot. Rings of scorched sand.
+
+## 7. Smaller polish worth doing
+- **Ghost runner in attract mode** (design bible) — replay the last death as a
+  silhouette burning to death under the score table.
+- **Level-256 kill screen** (design bible) — all parking lot, no sand.
+- **Dog + ball** — the one background event never built.
+- **Plover nesting zones** with the furious volunteer docent.
+- Report card could name your run: "The Sandal Incident", "Death by Pelican".
+- Weather could transition *mid-level* (marine layer burning off, as designed).
 
 ## Audit note (v3.2)
 An audit against the design bible found **five items wired into the game that

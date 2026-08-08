@@ -1339,6 +1339,159 @@ function updateProps(dt, runner) {
 }
 
 // ============================================================
+// SET PIECES — hand-authored chunks stitched into the procedural beach.
+// Noise makes beaches *different*; these make them memorable.
+// ============================================================
+function hotPad(x, z, r) { const p = { x, z, r }; S.hotPads.push(p); return p; }
+function coolPad(x, z, r) { const p = { x, z, r }; S.coolPads.push(p); return p; }
+function addRefuge(x, z, r, h, type, mesh) {
+  S.refuges.push({ x, z, r, h, type, mesh, crab: false, crabSprung: false });
+}
+
+/** A lava lake with a rickety plank crossing. Pure nerve. */
+function chunkBoardwalk(cx, rng) {
+  const cz = 6 + rng() * 8;
+  hotPad(cx, cz, 17);
+  const n = 7;
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1);
+    const px = cx - 15 + t * 30;
+    const pz = cz + Math.sin(t * Math.PI * 1.4) * 4.5;
+    const g = new THREE.Group();
+    const plank = meshOf(new THREE.BoxGeometry(3.0, 0.26, 1.5), 0xa07a4e);
+    plank.position.y = 0.62; g.add(plank);
+    for (const s of [-1, 1]) {
+      const post = meshOf(new THREE.CylinderGeometry(0.13, 0.13, 1.3, 5), 0x6f5436);
+      post.position.set(s * 1.1, 0.05, 0); g.add(post);
+    }
+    g.rotation.y = (rng() - 0.5) * 0.35;
+    g.position.set(px, groundY(px, pz), pz);
+    levelGroup.add(g);
+    addRefuge(px, pz, 1.85, 0.76, 'wood', g);
+  }
+  const sign = emojiSprite('\u{1F525}', 2.2);
+  sign.position.set(cx - 18, groundY(cx - 18, cz) + 4.2, cz);
+  levelGroup.add(sign);
+  return 'THE BOARDWALK';
+}
+
+/** Somebody's enormous sandcastle kingdom. Cool packed lanes, hot everywhere else. */
+function chunkMaze(cx, rng) {
+  const cz = 8 + rng() * 6;
+  hotPad(cx, cz, 15);
+  // a winding cool lane punched through the middle
+  let lz = cz - 7;
+  for (let i = 0; i < 9; i++) {
+    const px = cx - 13 + i * 3.2;
+    lz = clamp(lz + (rng() - 0.5) * 5.5, cz - 8, cz + 8);
+    coolPad(px, lz, 3.4);
+    // castle walls flanking the lane
+    for (const side of [-1, 1]) {
+      if (rng() < 0.6) continue;
+      const wx = px, wz = lz + side * (4.2 + rng() * 1.6);
+      const tower = meshOf(new THREE.CylinderGeometry(0.7, 0.95, 1.4 + rng(), 8), 0xe8cf9a);
+      tower.position.set(wx, groundY(wx, wz) + 0.7, wz);
+      levelGroup.add(tower);
+      const cap = meshOf(new THREE.ConeGeometry(0.55, 0.6, 8), 0xd9bd84);
+      cap.position.set(wx, groundY(wx, wz) + 1.7, wz);
+      levelGroup.add(cap);
+    }
+  }
+  const flag = emojiSprite('\u{1F3F0}', 2.2);
+  flag.position.set(cx, groundY(cx, cz) + 4.6, cz);
+  levelGroup.add(flag);
+  return 'THE SANDCASTLE KINGDOM';
+}
+
+/** An old pier. Elevated, safe, and absolutely covered in gulls. */
+function chunkPier(cx, rng) {
+  const startZ = 16, endZ = -10;
+  const deck = [];
+  for (let i = 0; i < 11; i++) {
+    const t = i / 10;
+    const pz = lerp(startZ, endZ, t);
+    const g = new THREE.Group();
+    const board = meshOf(new THREE.BoxGeometry(4.2, 0.3, 2.8), 0x8f7048);
+    board.position.y = 1.5; g.add(board);
+    for (const s of [-1, 1]) {
+      const post = meshOf(new THREE.CylinderGeometry(0.18, 0.2, 3.0, 6), 0x5f4830);
+      post.position.set(s * 1.7, 0.1, 0); g.add(post);
+      const rail = meshOf(new THREE.BoxGeometry(0.12, 0.12, 2.8), 0x9c7c52);
+      rail.position.set(s * 1.9, 2.3, 0); g.add(rail);
+      const upright = meshOf(new THREE.CylinderGeometry(0.08, 0.08, 0.9, 4), 0x9c7c52);
+      upright.position.set(s * 1.9, 1.9, 0); g.add(upright);
+    }
+    g.position.set(cx, groundY(cx, pz), pz);
+    levelGroup.add(g);
+    addRefuge(cx, pz, 2.1, 1.62, 'wood', g);
+    deck.push(g);
+  }
+  // the ground on either side of it bakes, so the pier is the way through
+  hotPad(cx - 9, 8, 10);
+  hotPad(cx + 9, 8, 10);
+  const sign = emojiSprite('\u{1F3A1}', 2.4);
+  sign.position.set(cx, groundY(cx, startZ) + 5.4, startZ + 1);
+  levelGroup.add(sign);
+  return 'THE OLD PIER';
+}
+
+/** Somebody's entire extended family. Cool towels everywhere. Half have crabs. */
+function chunkTowelVillage(cx, rng) {
+  const cz = 4 + rng() * 8;
+  hotPad(cx, cz, 13);
+  const cols = [0xff6fa5, 0x57d6f2, 0xffe07a, 0x9dff8a, 0xc792ff, 0xffa552];
+  for (let i = 0; i < 14; i++) {
+    const a = rng() * Math.PI * 2, rr = rng() * 10;
+    const tx = cx + Math.cos(a) * rr, tz = clamp(cz + Math.sin(a) * rr * 0.7, -2, 22);
+    const g = new THREE.Group();
+    const towel = meshOf(new THREE.BoxGeometry(2.5, 0.2, 1.7), cols[Math.floor(rng() * cols.length)]);
+    towel.rotation.y = rng() * Math.PI; towel.position.y = 0.1; g.add(towel);
+    if (rng() < 0.4) {
+      const bag = meshOf(new THREE.BoxGeometry(0.6, 0.55, 0.45), 0xe8734a);
+      bag.position.set(0.9, 0.42, -0.5); g.add(bag);
+    }
+    g.position.set(tx, groundY(tx, tz), tz);
+    levelGroup.add(g);
+    const ref = { x: tx, z: tz, r: 1.7, h: 0.24, type: 'towel', mesh: g,
+                  crab: rng() < 0.45, crabSprung: false };
+    S.refuges.push(ref);
+  }
+  const sign = emojiSprite('\u{1F3D6}', 2.2);
+  sign.position.set(cx, groundY(cx, cz) + 4.4, cz);
+  levelGroup.add(sign);
+  return 'THE TOWEL VILLAGE';
+}
+
+const CHUNKS = [chunkBoardwalk, chunkMaze, chunkPier, chunkTowelVillage];
+/** Drop a couple of authored chunks along the beach, spaced apart. */
+function placeSetPieces(rng) {
+  if (S.isIsland) return;
+  // remember what the procedural pass laid down, so we can clear its debris
+  // out of any lava we're about to create — otherwise you could just stroll
+  // across a random towel and the whole set piece is pointless
+  const preexisting = new Set(S.refuges);
+  const count = 2 + (rng() < 0.55 ? 1 : 0);
+  const picks = [...CHUNKS].sort(() => rng() - 0.5).slice(0, count);
+  const names = [];
+  picks.forEach((fn, i) => {
+    const t = (i + 1) / (count + 1);
+    const cx = lerp(W.startX + 45, W.goalX - 45, t) + (rng() - 0.5) * 22;
+    names.push(fn(cx, rng));
+  });
+  S.refuges = S.refuges.filter((r) => {
+    if (!preexisting.has(r)) return true;                 // the chunk's own props stay
+    for (const p of S.hotPads) {
+      if (Math.hypot(r.x - p.x, r.z - p.z) < p.r * 0.92) {
+        if (r.mesh) levelGroup.remove(r.mesh);
+        return false;
+      }
+    }
+    return true;
+  });
+  S.setPieces = names;
+}
+
+// ============================================================
 // THE RESCUE — somebody walked all the way back to the truck for your shoes
 // ============================================================
 function mkRescuer() {
@@ -1621,7 +1774,7 @@ export function generateLevel(runner) {
     if (S.ev.whale) scene.remove(S.ev.whale.mesh);
   }
   S.ev = freshEvents(); S.ev.nextAt = S.t + 9;
-  S.coolPads = []; S.guilt = 0; S.prophet = null;
+  S.coolPads = []; S.hotPads = []; S.setPieces = []; S.guilt = 0; S.prophet = null;
   S.chests = []; S.crabs = [];
   if (S.rescue) { levelGroup.remove(S.rescue.mesh); levelGroup.remove(S.rescue.marker); }
   S.rescue = null; S.shoes = 0; S.keysUsed = false;
@@ -1706,6 +1859,9 @@ export function generateLevel(runner) {
   }
   // a plover works this beach from level 3 on, running its little con
   if (S.level >= 3 && rng() < 0.55) spawnPlover(runner);
+
+  // ---- authored set pieces, dropped in before the loot so items can sit on them
+  placeSetPieces(rng);
 
   // ---- the chest: always well off the sensible line, out in the hot dunes
   if (!S.isIsland && rng() < 0.45) {

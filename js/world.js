@@ -142,6 +142,12 @@ export function heatAt(x, z, t) {
     if (d < ev.focus.r) h += 0.85 * (1 - d / ev.focus.r);
   }
   h -= shadeAt(x, z) * 0.55;
+  // hand-authored set pieces force their own ground: lava lakes the boardwalk
+  // crosses, scorched maze walls, the ground around the pier
+  for (const p of S.hotPads) {
+    const d = Math.hypot(x - p.x, z - p.z);
+    if (d < p.r) h = Math.max(h, lerp(1.55, 0.75, d / p.r));
+  }
   // packed damp sand around the sandcastles, and whatever the kite is lying on
   for (const p of S.coolPads) {
     const d = Math.hypot(x - p.x, z - p.z);
@@ -183,6 +189,15 @@ export function paintSand(t) {
     if (ev && ev.focus && ev.focus.armed) {
       const d = Math.hypot(x - ev.focus.x, z - ev.focus.z);
       if (d < ev.focus.r) h += 0.9 * (1 - d / ev.focus.r);
+    }
+    // set-piece ground must LOOK like what it is, or the platforming is unfair
+    for (const p of S.hotPads) {
+      const d = Math.hypot(x - p.x, z - p.z);
+      if (d < p.r) h = Math.max(h, lerp(1.55, 0.75, d / p.r));
+    }
+    for (const p of S.coolPads) {
+      const d = Math.hypot(x - p.x, z - p.z);
+      if (d < p.r) h -= 0.85 * (1 - d / p.r);
     }
     let r, g, b;
     // strong contrast: the colour IS the tell, so it must be unmissable
