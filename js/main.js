@@ -542,6 +542,7 @@ function die() {
     ['Robbed by seagulls', s.thefts],
     ['Loot chased down', s.recovered],
     ['Fell for the plover act', s.conned],
+    ['Times she saved you', s.rescues],
     ['Undignified stumbles', s.trips],
     ['Full faceplants', s.faceplants],
     ['Towel crabs met', s.crabs],
@@ -797,6 +798,8 @@ function simulate(dt) {
   }
   // humidity: nothing cools as well as it should, and you know it
   if (rate < 0 && S.weather.coolMul) rate *= S.weather.coolMul;
+  // she brought your shoes. the sand is somebody else's problem now.
+  if (S.shoes > 0) rate = Math.min(rate, -14);
   if (S.invuln > 0) rate = Math.min(rate, HEAT.coolRefuge);   // the sand simply gives up
   // the planted foot takes the brunt — alternating is how you survive.
   // single shoes protect one foot only, which is very funny and quite useful.
@@ -995,6 +998,9 @@ function updateHUD() {
   if (S.invuln > 0) {
     D.invuln.classList.remove('hidden');
     D.invuln.textContent = '6 — 7   ' + S.invuln.toFixed(1) + 's';
+  } else if (S.shoes > 0) {
+    D.invuln.classList.remove('hidden');
+    D.invuln.textContent = '\u{1F45F} SHOES  ' + S.shoes.toFixed(0) + 's';
   } else D.invuln.classList.add('hidden');
   if (S.combo >= 2) {
     D.combo.classList.remove('hidden');

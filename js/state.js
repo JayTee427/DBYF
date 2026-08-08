@@ -55,6 +55,7 @@ export const S = {
   refuges: [], items: [], birds: [], props: [], fx: [], checkpoints: [],
   coolPads: [], guilt: 0, prophet: null, readT: 0, windDir: 0,
   chests: [], crabs: [], mapFrags: 0, islandPending: false, keysUsed: false,
+  rescue: null, shoes: 0,
   ev: null,
   tutorial: 0,
   lastVoice: 0, lastNag: 0, lastSqueak: 0,
@@ -68,7 +69,7 @@ export function freshStats() {
     items: 0, crabs: 0, punts: 0, maxL: 0, maxR: 0, maxState: 0,
     scouts: 0, waterTime: 0, leaps: 0, bestCombo: 0, cleanLevel: true, pacifist: true,
     raids: 0, thefts: 0, recovered: 0, conned: 0, scattered: 0,
-    trips: 0, faceplants: 0, prophecies: 0, events: 0, chests: 0, islands: 0,
+    trips: 0, faceplants: 0, prophecies: 0, events: 0, chests: 0, islands: 0, rescues: 0,
   };
 }
 

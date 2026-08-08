@@ -7,7 +7,7 @@ and what's left. Keep it current when things land.
 
 ## Where we are
 
-**v2.9** — **section B complete**. Playable end to end. Third-person runner, endless escalating beaches,
+**v3.0** — **sections A and B complete**. Playable end to end. Third-person runner, endless escalating beaches,
 permanent roguelike builds, a living bird flock, arcade scoring.
 
 ### Built and working
@@ -163,6 +163,15 @@ Built: cloud shade, whale wave, sun focus, sneaker wave.
       leftovers**, **lost GoPro**, **rusty lantern**, **old boat board** ([E] lay a
       plank refuge), and **somebody's car keys** — which reroute the whole level's goal
       to **THE PARKING LOT** so you can return them.
+
+### ⭐ THE RESCUE *(v3.0 — from the real day at the beach)*
+Rare, and she only comes when you're genuinely in trouble (OW OW OW or worse,
+level 2+). Somebody appears way down the beach walking toward you with your
+shoes held over her head, waving. You have ~26 seconds to reach her.
+- Catch her: **shoes on** — feet reset to zero, +30 HP, near-total heat immunity
+  for 55s, +2500, and **the goal changes to THE ORANGE RAPTOR**, a big lifted
+  orange truck on 37s. The level becomes a walk home.
+- Miss her: *"...she waited as long as she could."*
 
 **Section B is complete.** 40 items, 9 bird types, 8 weather characters, 17 events,
 8 goals, the Wash Prophet, Pirate's Treasure and Treasure Island.

@@ -160,6 +160,16 @@ export const AU = {
     }
     if (ctx.currentTime < this.beaconAt) return;
     if (kind === 'bark') { this.bark(0.06 * v); this.beaconAt = ctx.currentTime + 1.8; }
+    else if (kind === 'horn') {                       // a big truck, two friendly honks
+      this.tone(220, 0.16, 'triangle', 0.06 * v);
+      this.tone(165, 0.2, 'triangle', 0.05 * v, 0.2);
+      this.beaconAt = ctx.currentTime + lerp(3.2, 1.1, v);
+    }
+    else if (kind === 'alarm') {                      // the car keys' chirp
+      this.tone(1400, 0.05, 'square', 0.04 * v);
+      this.tone(1400, 0.05, 'square', 0.04 * v, 0.12);
+      this.beaconAt = ctx.currentTime + lerp(2.8, 0.9, v);
+    }
     else if (kind === 'drip') { this.tone(1200, 0.05, 'sine', 0.055 * v); this.tone(880, 0.06, 'sine', 0.045 * v, 0.06); this.beaconAt = ctx.currentTime + 1.2; }
     else if (kind === 'chime') { this.tone(1046, 0.14, 'sine', 0.05 * v); this.tone(1568, 0.16, 'sine', 0.035 * v, 0.09); this.beaconAt = ctx.currentTime + lerp(2.6, 0.9, v); }
     else { this.tone(980, 0.09, 'sine', 0.045 * v); this.beaconAt = ctx.currentTime + lerp(2.6, 0.7, v); }

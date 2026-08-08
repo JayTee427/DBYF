@@ -39,6 +39,9 @@ export const GOALS = {
                line: 'whoever you are, here are your keys.' },
   island:    { icon: '\u{1F3DD}', name: 'THE BURIED HOARD', r: 5.0, beacon: 'chime',  z: [2, 14],  gauntlet: false,
                line: 'it was real. it was ALL REAL.' },
+  // she came back for you. now walk to the truck like a person with shoes.
+  raptor:    { icon: '\u{1F6FB}', name: 'THE ORANGE RAPTOR', r: 6.5, beacon: 'horn', z: [23, 29], gauntlet: false,
+               line: 'we are going home. and we are getting ice cream.' },
 };
 
 // ============================================================
@@ -678,6 +681,37 @@ function buildGoal(key, x, z) {
     const star = meshOf(new THREE.SphereGeometry(0.24, 8, 6), 0xff7a55); star.position.set(0.6, 0.2, 0.4); g.add(star);
     const anem = meshOf(new THREE.SphereGeometry(0.18, 8, 6), 0xc792ff); anem.position.set(-0.5, 0.2, -0.5); g.add(anem);
 
+  } else if (key === 'raptor') {
+    // big, orange, and sitting on 37s
+    const TIRE = 0.86;
+    const body = meshOf(new THREE.BoxGeometry(6.4, 1.5, 2.9), 0xf26a1b);
+    body.position.y = 2.5; g.add(body);
+    const cab = meshOf(new THREE.BoxGeometry(3.2, 1.35, 2.75), 0xff8330);
+    cab.position.set(-0.8, 3.6, 0); g.add(cab);
+    const glass = meshOf(new THREE.BoxGeometry(2.9, 0.95, 2.8), 0x33454f, { outline: false });
+    glass.position.set(-0.8, 3.7, 0); g.add(glass);
+    const bed = meshOf(new THREE.BoxGeometry(2.6, 0.75, 2.8), 0xd9581a);
+    bed.position.set(2.1, 3.05, 0); g.add(bed);
+    const grille = meshOf(new THREE.BoxGeometry(0.28, 1.0, 2.7), 0x2a2a30, { outline: false });
+    grille.position.set(-3.3, 2.6, 0); g.add(grille);
+    for (const s of [-1, 1]) {
+      const lamp = meshOf(new THREE.BoxGeometry(0.2, 0.42, 0.6), 0xfff3c4, { outline: false });
+      lamp.position.set(-3.3, 3.0, s * 0.95); g.add(lamp);
+    }
+    const bar = meshOf(new THREE.CylinderGeometry(0.09, 0.09, 2.7, 6), 0x2a2a30);
+    bar.rotation.x = Math.PI / 2; bar.position.set(-0.9, 4.55, 0); g.add(bar);
+    for (let i = -1; i <= 1; i++) {
+      const pod = meshOf(new THREE.BoxGeometry(0.3, 0.28, 0.4), 0xfff3c4, { outline: false });
+      pod.position.set(-0.9, 4.75, i * 0.9); g.add(pod);
+    }
+    for (const [wx, wz] of [[-2.3, 1.6], [-2.3, -1.6], [2.3, 1.6], [2.3, -1.6]]) {
+      const tyre = meshOf(new THREE.CylinderGeometry(TIRE, TIRE, 0.62, 14), 0x201f24);
+      tyre.rotation.x = Math.PI / 2; tyre.position.set(wx, TIRE, wz); g.add(tyre);
+      const rim = meshOf(new THREE.CylinderGeometry(0.42, 0.42, 0.66, 8), 0xb9bcc2, { outline: false });
+      rim.rotation.x = Math.PI / 2; rim.position.set(wx, TIRE, wz); g.add(rim);
+    }
+    const flag = emojiSprite('\u{1F6FB}', 3.0); flag.position.y = 6.6; g.add(flag);
+
   } else if (key === 'parking') {
     const lot = meshOf(new THREE.BoxGeometry(16, 0.14, 11), 0x4a4a52);
     lot.position.y = 0.07; g.add(lot);
@@ -968,6 +1002,9 @@ export function fireEvent(kind, runner) {
       say('this is not about me. excellent.', true);
     }
 
+  } else if (kind === 'rescue') {
+    startRescue(runner);
+
   } else if (kind === 'dustdevil') {
     // a small giddy tornado. it is not hostile, it is five years old.
     const g = new THREE.Group();
@@ -1072,6 +1109,7 @@ export function updateEvents(dt, runner) {
     }
   }
   updateProps(dt, runner);
+  updateRescue(dt, runner);
 
   if (S.t >= ev.nextAt) {
     const pool = [['cloud', 22], ['whale', 15], ['dolphins', 17], ['sealions', 15],
@@ -1079,6 +1117,8 @@ export function updateEvents(dt, runner) {
                   ['dustdevil', 13], ['surfschool', 11]];
     if (S.level >= 2) pool.push(['focus', 18], ['sneaker', 14], ['wedding', 11], ['fisherman', 12]);
     if (S.level >= 3) pool.push(['grunion', 8], ['lowtide', 12], ['civilwar', 10]);
+    // rare, and she only comes if you're genuinely in trouble
+    if (S.level >= 2 && !S.shoes && !S.rescue && S.heatState >= 2) pool.push(['rescue', 7]);
     let tot = 0; for (const [, w] of pool) tot += w;
     let r = Math.random() * tot; let pick = 'cloud';
     for (const [k, w] of pool) { r -= w; if (r <= 0) { pick = k; break; } }
@@ -1289,6 +1329,120 @@ function updateProps(dt, runner) {
 }
 
 // ============================================================
+// THE RESCUE — somebody walked all the way back to the truck for your shoes
+// ============================================================
+function mkRescuer() {
+  const g = new THREE.Group();
+  const rig = new THREE.Group(); g.add(rig);
+  const torso = meshOf(new THREE.CapsuleGeometry(0.27, 0.32, 4, 10), 0xef5b8c);
+  torso.position.y = 1.04; rig.add(torso);
+  const shorts = meshOf(new THREE.CapsuleGeometry(0.28, 0.09, 4, 10), 0xfdfdfa);
+  shorts.position.y = 0.79; rig.add(shorts);
+  const head = meshOf(new THREE.SphereGeometry(0.29, 14, 12), 0xf3c9a0);
+  head.position.y = 1.55; rig.add(head);
+  const hair = meshOf(new THREE.SphereGeometry(0.30, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.6), 0x6b4226);
+  hair.position.y = 1.57; rig.add(hair);
+  const pony = meshOf(new THREE.CapsuleGeometry(0.1, 0.42, 4, 8), 0x6b4226);
+  pony.position.set(0, 1.45, -0.3); pony.rotation.x = 0.5; rig.add(pony);
+  const shades = meshOf(new THREE.BoxGeometry(0.42, 0.1, 0.08), 0x241a20, { outlineScale: 1.12 });
+  shades.position.set(0, 1.6, 0.26); rig.add(shades);
+  // one arm up, holding the shoes overhead so you can see them coming
+  const armUp = new THREE.Group(); armUp.position.set(0.32, 1.24, 0);
+  const upper = meshOf(new THREE.CapsuleGeometry(0.08, 0.34, 4, 8), 0xf3c9a0);
+  upper.position.y = 0.22; armUp.add(upper);
+  rig.add(armUp);
+  const armLo = new THREE.Group(); armLo.position.set(-0.32, 1.24, 0);
+  const lower = meshOf(new THREE.CapsuleGeometry(0.08, 0.34, 4, 8), 0xf3c9a0);
+  lower.position.y = -0.24; armLo.add(lower);
+  rig.add(armLo);
+  const shoes = emojiSprite('\u{1F45F}', 1.5);
+  shoes.position.set(0.34, 1.95, 0); rig.add(shoes);
+  const legL = new THREE.Group(); legL.position.set(-0.15, 0.74, 0);
+  const ll = meshOf(new THREE.CapsuleGeometry(0.1, 0.34, 4, 8), 0xf3c9a0); ll.position.y = -0.25; legL.add(ll);
+  rig.add(legL);
+  const legR = new THREE.Group(); legR.position.set(0.15, 0.74, 0);
+  const lr = meshOf(new THREE.CapsuleGeometry(0.1, 0.34, 4, 8), 0xf3c9a0); lr.position.y = -0.25; legR.add(lr);
+  rig.add(legR);
+  g.userData = { rig, armUp, legL, legR, shoes };
+  return g;
+}
+function startRescue(runner) {
+  if (S.rescue || S.shoes > 0) return;
+  const g = mkRescuer();
+  // she comes from the truck end of the beach, out on the hot open sand
+  const rx = clamp(runner.x + 42 + Math.random() * 22, W.xMin + 6, W.goalX - 8);
+  const rz = clamp(runner.z + (Math.random() - 0.5) * 12, 2, 22);
+  g.position.set(rx, groundY(rx, rz), rz);
+  levelGroup.add(g);
+  const marker = emojiSprite('\u{1F45F}', 2.6);
+  marker.material.fog = false; marker.material.depthTest = false; marker.renderOrder = 895;
+  levelGroup.add(marker);
+  S.rescue = { x: rx, z: rz, mesh: g, marker, patience: 26, phase: 0, wave: 0 };
+  bus.banner('SOMEBODY IS COMING', 'she went back to the truck for your shoes');
+  toast('\u{1F45F} SHE BROUGHT YOUR SHOES — GET TO HER', 'tip');
+  AU.fanfare();
+  say('wait — is that — SHE WENT BACK FOR MY SHOES!', true);
+}
+export function updateRescue(dt, runner) {
+  const r = S.rescue;
+  if (r) {
+    r.patience -= dt;
+    r.phase += dt;
+    // she walks toward you, waving the shoes over her head
+    const dx = runner.x - r.x, dz = runner.z - r.z;
+    const d = Math.hypot(dx, dz);
+    if (d > 1.4) {
+      const sp = 2.6;
+      r.x += dx / d * sp * dt;
+      r.z += dz / d * sp * dt;
+    }
+    const u = r.mesh.userData;
+    r.mesh.position.set(r.x, groundY(r.x, r.z) + Math.abs(Math.sin(r.phase * 7)) * 0.05, r.z);
+    r.mesh.rotation.y = Math.atan2(dx, dz);
+    u.legL.rotation.x = Math.sin(r.phase * 7) * 0.55;
+    u.legR.rotation.x = -Math.sin(r.phase * 7) * 0.55;
+    u.armUp.rotation.z = -0.5 + Math.sin(r.phase * 9) * 0.45;    // waving them at you
+    u.rig.rotation.z = Math.sin(r.phase * 7) * 0.05;
+    r.marker.position.set(r.x, groundY(r.x, r.z) + 4.6 + Math.sin(r.phase * 3) * 0.3, r.z);
+
+    if (d < 2.4) {                                    // CAUGHT HER
+      levelGroup.remove(r.mesh); levelGroup.remove(r.marker);
+      S.rescue = null;
+      S.shoes = 55;
+      S.feet.L = 0; S.feet.R = 0;
+      S.health = Math.min(100, S.health + 30);
+      S.stats.rescues++;
+      addScore(2500);
+      bus.banner('SHOES.', 'now get to the truck');
+      toast('\u{1F45F} YOU HAVE SHOES ON. +2500');
+      AU.fanfare(); AU.shanty();
+      bus.shake(0.5);
+      particles.burst(runner.x, runner.y + 1.2, runner.z, 30,
+        { color: 0xffd94a, size: 0.42, ttl: 1.3, vy: 3, spread: 3.4 });
+      say('I love you. I love you so much. shoes.', true);
+      // the whole level becomes a walk back to the truck
+      if (S.goal) S.goal.marker.visible = false;
+      S.goal = buildGoal('raptor', W.goalX, 23 + Math.random() * 5);
+      return;
+    }
+    if (r.patience <= 0) {
+      levelGroup.remove(r.mesh); levelGroup.remove(r.marker);
+      S.rescue = null;
+      toast('...she waited as long as she could.', 'bad');
+      say('no — wait — come back —', true);
+    }
+  }
+  // shoes wear off eventually; they were never really your size
+  if (S.shoes > 0) {
+    S.shoes -= dt;
+    if (S.shoes <= 0) {
+      toast('the shoes come off. of course they do.', 'bad');
+      say('oh come ON.', true);
+    }
+  }
+}
+
+// ============================================================
 // PIRATE'S TREASURE — half-buried, always off the sensible route
 // ============================================================
 function buildChest(x, z) {
@@ -1454,6 +1608,8 @@ export function generateLevel(runner) {
   S.ev = freshEvents(); S.ev.nextAt = S.t + 9;
   S.coolPads = []; S.guilt = 0; S.prophet = null;
   S.chests = []; S.crabs = [];
+  if (S.rescue) { levelGroup.remove(S.rescue.mesh); levelGroup.remove(S.rescue.marker); }
+  S.rescue = null; S.shoes = 0; S.keysUsed = false;
   particles.clear(); prints.clear();
 
   S.seed = Math.floor(Math.random() * 90000) + 10000;

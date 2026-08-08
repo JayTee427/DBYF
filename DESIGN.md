@@ -67,6 +67,14 @@ One weird pelican per beach, apart from all birds, never attacks. Stand near 3s 
 ## Arcade layer
 Three-initial letter-wheel entry (seals watch if you place #1). Local leaderboard (localStorage) → daily-seed global later. Floating style bonuses: HOT STREAK, PHOTO FINISH, FULL POUCH, PACIFIST, DUCK LOYALIST. Attract mode: ghost runner burns to death under the score table. The coin is a sand dollar. End-of-level **podiatrist report card** ("Left foot: medium-rare. Diagnosis: why did you do this.") merges with arcade tick-tick score tally.
 
+## The Rescue (from the real day)
+Rare event, only fires when your feet are genuinely in trouble. She walks out
+across the hot sand from the truck carrying your shoes, held up over her head so
+you can see them coming. Reach her in time and she puts them on you: feet reset,
+heat immunity, and the goal becomes **THE ORANGE RAPTOR** — the big orange Ford
+on 37s — so you can walk back like a person instead of running like a lunatic.
+Miss her and she waits as long as she can, then goes back without you.
+
 ## Deferred to v2
 Toe-dig (cut: slows gameplay), Dignity currency, zinc-oxide war paint cosmetics.
 
