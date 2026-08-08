@@ -7,7 +7,7 @@ and what's left. Keep it current when things land.
 
 ## Where we are
 
-**v2.8** — playable end to end. Third-person runner, endless escalating beaches,
+**v2.9** — **section B complete**. Playable end to end. Third-person runner, endless escalating beaches,
 permanent roguelike builds, a living bird flock, arcade scoring.
 
 ### Built and working
@@ -106,7 +106,8 @@ mediocre movement just produces more mediocre-feeling content.
       direction, with sand streaming past. Lean against it.
 - [x] **THE HUMIDITY** *(v2.8)* — no visible weather at all; everything just cools 45%
       worse. Refuges, shade and the sea all underperform. It's not the heat.
-- [ ] **Dust Devil** — a five-year-old tornado carrying items around; chase it to shop
+- [x] **Dust Devil** *(v2.9)* — a giddy little tornado wandering the beach carrying
+      somebody's things. Get close and it hands them over; get closer and it spins you.
 
 ### Background events
 Built: cloud shade, whale wave, sun focus, sneaker wave.
@@ -132,18 +133,22 @@ Built: cloud shade, whale wave, sun focus, sneaker wave.
       drains hard; walk straight through the middle of it
 - [x] **Fisherman's backcast** *(v2.8)* — stand near him when he casts and you get
       hooked, dragged and apologised to
-- [ ] Surf school parade
+- [x] **Surf school parade** *(v2.9)* — a wobbling line of beginners shuffling down to
+      the water. The instructor's whistle spikes attention, and somebody drops a foam
+      board that becomes a refuge.
 
-### Systems never started
+### Systems
 - [x] **The Wash Prophet** *(v2.6)* — one pelican per beach, standing apart, never
       attacks. Linger 2.4s and he offers a line; 50/50 real intel vs. pelican nonsense,
       never labelled which. The captain's pipe raises him to 75/25.
-- [ ] **Pirate's Treasure** — half-buried chest off the optimal path →
-      doubloons (score, heavy), pirate boots, cursed compass (points through the
-      *worst* route), an enormous angry crab, and map fragments ×3 →
-      **Treasure Island** bonus level (all rock, no lava, pure platforming, one heron-equivalent)
+- [x] **Pirate's Treasure** *(v2.9)* — a half-buried chest, always out in the scorching
+      dunes off the sensible line. Five outcomes, all verified firing: **gold doubloons**
+      (score pours in, you're 14% slower), **pirate boots**, the **cursed compass**,
+      an **enormous angry crab** that chases and pincers you, and **map fragments**.
+- [x] **Treasure Island** *(v2.9)* — collect 3 fragments in a run and the next beach is
+      THE BURIED HOARD: a rock garden with no lava and no chest, just the payout.
 
-### Items — 31 of ~40 built
+### Items — 40 built
 - [x] ~~regressions~~ *restored in v2.6*: sunscreen, half-melted popsicle (3 charges),
       pizza slice (now an [E] you eat)
 - [x] **single flip-flop** and **left boot** — each protects exactly ONE randomly chosen
@@ -154,10 +159,13 @@ Built: cloud shade, whale wave, sun focus, sneaker wave.
 - [x] **shorts** — the fourth slot. Paradox unexplained, as designed.
 - [x] **old captain's pipe** — upgrades the Wash Prophet to 75/25
 
-Still never built:
-- [ ] binoculars · [ ] beach leftovers · [ ] lost GoPro (picture-in-picture intel)
-- [ ] somebody's car keys (rerolls the goal) · [ ] rusty lantern (identify pre-pickup)
-- [ ] old boat board
+- [x] *(v2.9)* **binoculars** ([E] marks everything worth having ahead), **beach
+      leftovers**, **lost GoPro**, **rusty lantern**, **old boat board** ([E] lay a
+      plank refuge), and **somebody's car keys** — which reroute the whole level's goal
+      to **THE PARKING LOT** so you can return them.
+
+**Section B is complete.** 40 items, 9 bird types, 8 weather characters, 17 events,
+8 goals, the Wash Prophet, Pirate's Treasure and Treasure Island.
 
 ## C. Structure & replay
 

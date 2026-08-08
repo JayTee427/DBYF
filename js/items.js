@@ -174,6 +174,54 @@ export const ITEMS = {
     passive: { aggro: 1.35, eagle: true }, cursed: true, tags: ['food'],
   },
 
+  binos: {
+    icon: '\u{1F52D}', name: 'BINOCULARS', rarity: 1, w: 7,
+    desc: '[E] mark every item and hazard on this stretch',
+    passive: {}, active: { id: 'scan', cd: 18, label: 'SCAN' }, tags: ['gear', 'odd'],
+  },
+  leftovers: {
+    icon: '\u{1F35F}', name: 'BEACH LEFTOVERS', rarity: 1, w: 8,
+    desc: '[E] eat it. +HP. deeply interesting to birds.',
+    passive: { aggro: 1.35 }, active: { id: 'eat', cd: 3, label: 'EAT' }, charges: 2, tags: ['food'],
+  },
+  gopro: {
+    icon: '\u{1F4F7}', name: 'LOST GOPRO', rarity: 2, w: 5,
+    desc: 'warns you the moment anything lines you up',
+    passive: { warn: true }, tags: ['gear', 'odd'],
+  },
+  lantern: {
+    icon: '\u{1F3EE}', name: 'RUSTY LANTERN', rarity: 2, w: 5,
+    desc: 'cursed things glow before you touch them',
+    passive: { identify: true }, tags: ['odd'],
+  },
+  boatboard: {
+    icon: '\u{1F6F6}', name: 'OLD BOAT BOARD', rarity: 2, w: 5,
+    desc: '[E] lay it down as a refuge. splinters.',
+    passive: {}, active: { id: 'plank', cd: 10, label: 'LAY PLANK' }, charges: 2, tags: ['gear', 'pirate'],
+  },
+  keys: {
+    icon: '\u{1F511}', name: "SOMEBODY'S CAR KEYS", rarity: 2, w: 4,
+    desc: 'somewhere, a car is waiting for these',
+    passive: { keys: true }, tags: ['odd'],
+  },
+
+  // ---------------- pirate's treasure ----------------
+  doubloons: {
+    icon: '\u{1FA99}', name: 'GOLD DOUBLOONS', rarity: 3, w: 0,
+    desc: 'score pours in. they weigh a ton.',
+    passive: { speed: 0.86, gold: true }, tags: ['pirate', 'odd'],
+  },
+  compass: {
+    icon: '\u{1F9ED}', name: 'CURSED COMPASS', rarity: 3, w: 0,
+    desc: 'always points at the goal. never the good way.',
+    passive: {}, cursed: true, tags: ['pirate', 'odd'],
+  },
+  mapfrag: {
+    icon: '\u{1F5FA}', name: 'MAP FRAGMENT', rarity: 3, w: 0,
+    desc: 'three of these and you can find the island',
+    passive: {}, instant: true, tags: ['pirate'],
+  },
+
   // ---------------- and then there's this ----------------
   sixseven: {
     icon: '\u{1F522}', label: '6|7', name: '6-7', rarity: 3, w: 1.6,
@@ -254,11 +302,16 @@ export function buildStats() {
   const out = {
     heat: 1, aggro: 1, speed: 1, stam: 1, guard: 0, loot: 1, sunFocus: 1,
     eagle: false, slots: 0, slip: false,
+    warn: false, identify: false, gold: false, keys: false,
   };
   for (const s of S.slots) {
     const p = s.def.passive || {};
     if (p.slots) out.slots += p.slots;
     if (p.slip) out.slip = true;
+    if (p.warn) out.warn = true;
+    if (p.identify) out.identify = true;
+    if (p.gold) out.gold = true;
+    if (p.keys) out.keys = true;
     if (p.heat !== undefined) out.heat *= p.heat;
     if (p.aggro !== undefined) out.aggro *= p.aggro;
     if (p.speed !== undefined) out.speed *= p.speed;

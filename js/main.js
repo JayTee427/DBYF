@@ -2,7 +2,7 @@
 // main.js — camera, input, simulation, flow, arcade layer
 // ============================================================
 import * as THREE from 'three';
-import { clamp, lerp, damp, angleLerp, mulberry32 } from './engine.js';
+import { clamp, lerp, damp, angleLerp, mulberry32, meshOf } from './engine.js';
 import {
   S, W, HEAT, STAM, DIFFS, freshStats, HEAT_NAMES, footState,
   effHeat, effAggro, hasItem,
@@ -12,7 +12,8 @@ import {
   paintSand, updateHaze, faceHaze, sunSprite, WEATHER,
 } from './world.js';
 import {
-  Runner, GOALS, generateLevel, updateEvents, checkCheckpoints, dropItem, fireEvent,
+  Runner, GOALS, generateLevel, updateEvents, checkCheckpoints, checkChests,
+  dropItem, fireEvent, buildGoalAt, buildChestAt,
   particles, prints, wire, levelGroup,
 } from './actors.js';
 import {
@@ -80,6 +81,23 @@ function banner(title, sub) {
 }
 /** Pickups that fire on contact instead of taking a slot. */
 function instantPickup(key) {
+  if (key === 'mapfrag') {
+    S.mapFrags++;
+    if (S.mapFrags >= 3) {
+      S.mapFrags = 0;
+      S.islandPending = true;
+      banner('THE MAP IS COMPLETE', 'next beach: TREASURE ISLAND');
+      toast('\u{1F5FA} three fragments. you know where it is now.');
+      AU.shanty(); AU.fanfare();
+      say('I know where it is. I KNOW WHERE IT IS.', true);
+    } else {
+      banner('MAP FRAGMENT  ' + S.mapFrags + '/3', 'a corner of something older');
+      toast('\u{1F5FA} map fragment ' + S.mapFrags + ' of 3');
+      AU.coin();
+    }
+    addScore(400);
+    return;
+  }
   if (key === 'sixseven') {
     const dur = 2 + Math.random() * 4;              // 2–6 seconds, nobody knows why
     S.invuln = dur; S.invulnMax = dur; S.lastChant = 0;
@@ -248,6 +266,30 @@ function useItem() {
     AU.tone(300, 0.09, 'triangle', 0.07); AU.tone(240, 0.12, 'triangle', 0.06, 0.1);
     say('mmm. sandy.', true);
     if (inst.charges <= 0) { removeItem(inst); }
+
+  } else if (id === 'scan') {
+    let n = 0;
+    for (const it of S.items) {
+      if (it.taken) continue;
+      if (Math.abs(it.x - runner.x) > 70) continue;
+      it.mesh.children[1].scale.setScalar(2.4);          // blow up the icon so it's spottable
+      n++;
+    }
+    for (const ch of S.chests) if (!ch.opened) ch.mesh.children[4].scale.setScalar(3.2);
+    toast('\u{1F52D} ' + n + ' things worth having up ahead');
+    AU.tone(1200, 0.09, 'sine', 0.05); AU.tone(1600, 0.12, 'sine', 0.04, 0.08);
+
+  } else if (id === 'plank') {
+    const px = runner.x, pz = runner.z;
+    const plank = meshOf(new THREE.BoxGeometry(3.4, 0.24, 1.1), 0x9a7350);
+    plank.rotation.y = runner.facing;
+    plank.position.set(px, groundY(px, pz) + 0.12, pz);
+    levelGroup.add(plank);
+    S.refuges.push({ x: px, z: pz, r: 2.0, h: 0.28, type: 'wood', mesh: plank, crab: false, crabSprung: false, used: true });
+    inst.charges--;
+    toast('\u{1F6F6} plank down — ' + inst.charges + ' left');
+    AU.land(false);
+    if (inst.charges <= 0) removeItem(inst);
 
   } else if (id === 'plant') {
     if (planted) scene.remove(planted.mesh);
@@ -717,6 +759,18 @@ function simulate(dt) {
     S.readT = (S.readT || 0) + dt;
     if (S.readT > 1) { S.readT = 0; addScore(45); }
   }
+  // doubloons: heavy, but the score just keeps coming
+  if (build.gold) { S.goldT = (S.goldT || 0) + dt; if (S.goldT > 0.5) { S.goldT = 0; addScore(70); } }
+  // the keys belong to a car, and the car is in the parking lot
+  if (build.keys && !S.keysUsed && S.goal.key !== 'parking') {
+    S.keysUsed = true;
+    const gz = GOALS.parking.z[0] + Math.random() * (GOALS.parking.z[1] - GOALS.parking.z[0]);
+    S.goal.marker.visible = false;
+    S.goal = buildGoalAt('parking', S.goal.x, clamp(gz, 20, 28));
+    banner('CHANGE OF PLAN', 'somebody wants their keys back');
+    toast('\u{1F511} a car alarm starts chirping up at the lot');
+    say('these belong to somebody. right. the lot.', true);
+  }
   const shade = shadeAt(runner.x, runner.z);
   const airborne = !runner.grounded;
   surfing = Math.max(0, surfing - dt);
@@ -828,6 +882,7 @@ function simulate(dt) {
   if (S.freeze <= 0) updateEvents(dt, runner);
   tickCooldowns(dt);
   checkCheckpoints(runner);
+  checkChests(dt, runner);
   // charging through loiterers scatters them — you're not helpless
   if (runner.speed > 8.5) scatterAt(runner.x, runner.z, 2.4, false);
 
@@ -1058,7 +1113,7 @@ window.DBYF = {
   S, runner, camera, cam, keys, input, renderer, scene, AU,
   ITEMS, SYNERGIES, buildStats, activeSynergies, grant, readyActive, flock,
   spawnThief, spawnVulture, spawnFalcon, spawnEagle, scatterAt, useItem, dropItem,
-  spawnTerns, spawnPelicanLine, fireEvent,
+  spawnTerns, spawnPelicanLine, fireEvent, buildChestAt,
   levelComplete, die, nextLevel, generateLevel: () => generateLevel(runner),
   /** headless tick. `visual` does the expensive repaint; skip it for balance sims. */
   step(dt = 0.016, visual = true) {

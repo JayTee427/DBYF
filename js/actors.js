@@ -9,7 +9,7 @@ import {
 import { S, W, HEAT, STAM, DIFFS, effHeat, effAggro, hasItem, footState } from './state.js';
 import { scene, groundY, heatAt, wetness, waveZ, waveEdgeAt, shadeAt, pickWeather, applyWeather, buildScenery, resetTide, rebuildTerrain, WEATHER } from './world.js';
 import { AU, say, OW } from './audio.js';
-import { ITEMS, rollItem, buildStats, removeItem } from './items.js';
+import { ITEMS, rollItem, buildStats, removeItem, grant } from './items.js';
 import { flock, clearFlock, spawnPlover, spawnProphet, spawnWillets, buildSanderlings, sanderlingNear } from './birds.js';
 import { bus } from './bus.js';
 
@@ -35,6 +35,10 @@ export const GOALS = {
                line: 'hello little crabs. I live here now.' },
   nursery:   { icon: '\u{1F9AD}', name: 'THE SEAL NURSERY', r: 6.5, beacon: 'bark',   z: [-5, 1],  gauntlet: false,
                line: 'the seals... the seals approve of me.' },
+  parking:   { icon: '\u{1F697}', name: 'THE PARKING LOT',  r: 5.5, beacon: 'alarm',  z: [22, 28], gauntlet: true,
+               line: 'whoever you are, here are your keys.' },
+  island:    { icon: '\u{1F3DD}', name: 'THE BURIED HOARD', r: 5.0, beacon: 'chime',  z: [2, 14],  gauntlet: false,
+               line: 'it was real. it was ALL REAL.' },
 };
 
 // ============================================================
@@ -600,6 +604,12 @@ function buildItemPickup(key, x, z) {
   return { key, x, z, mesh: g, box, taken: false, ph: Math.random() * 6.3 };
 }
 
+/** Plant a chest at a chosen spot (level gen + testing). */
+export function buildChestAt(x, z) { const c = buildChest(x, z); S.chests.push(c); return c; }
+
+/** Build a goal at a chosen spot (used when the car keys reroute you). */
+export function buildGoalAt(key, x, z) { return buildGoal(key, x, z); }
+
 /** Knock something loose onto the sand — it tumbles, then you can grab it back. */
 export function dropItem(key, x, z) {
   const cx = clamp(x, W.xMin + 2, W.xMax - 2);
@@ -667,6 +677,35 @@ function buildGoal(key, x, z) {
     pool.position.y = 0.16; g.add(pool);
     const star = meshOf(new THREE.SphereGeometry(0.24, 8, 6), 0xff7a55); star.position.set(0.6, 0.2, 0.4); g.add(star);
     const anem = meshOf(new THREE.SphereGeometry(0.18, 8, 6), 0xc792ff); anem.position.set(-0.5, 0.2, -0.5); g.add(anem);
+
+  } else if (key === 'parking') {
+    const lot = meshOf(new THREE.BoxGeometry(16, 0.14, 11), 0x4a4a52);
+    lot.position.y = 0.07; g.add(lot);
+    for (let i = -1; i <= 1; i++) {
+      const line = meshOf(new THREE.BoxGeometry(0.16, 0.02, 8), 0xe8e2cf, { outline: false });
+      line.position.set(i * 3.6, 0.16, 0); g.add(line);
+    }
+    const car = new THREE.Group();
+    const body = meshOf(new THREE.BoxGeometry(4.0, 1.0, 1.9), 0xc8443a); body.position.y = 0.85; car.add(body);
+    const cab = meshOf(new THREE.BoxGeometry(2.1, 0.85, 1.7), 0xdd6a5c); cab.position.set(-0.2, 1.6, 0); car.add(cab);
+    for (const [wx, wz] of [[-1.3, 0.95], [-1.3, -0.95], [1.3, 0.95], [1.3, -0.95]]) {
+      const w = meshOf(new THREE.CylinderGeometry(0.42, 0.42, 0.28, 10), 0x25252b);
+      w.rotation.x = Math.PI / 2; w.position.set(wx, 0.42, wz); car.add(w);
+    }
+    car.position.set(2.5, 0, 0); g.add(car);
+    g.userData.car = car;
+
+  } else if (key === 'island') {
+    // no lava here at all: a rock garden and the hoard in the middle
+    for (let i = 0; i < 10; i++) {
+      const a = i / 10 * Math.PI * 2, rr = 3.4 + (i % 3) * 1.1;
+      const rock = meshOf(new THREE.IcosahedronGeometry(1.1, 0), 0x8f8f9a);
+      rock.scale.y = 0.5; rock.position.set(Math.cos(a) * rr, 0.24, Math.sin(a) * rr); g.add(rock);
+    }
+    const chest = meshOf(new THREE.BoxGeometry(2.2, 1.3, 1.5), 0x8a6242); chest.position.y = 0.75; g.add(chest);
+    const lid = meshOf(new THREE.BoxGeometry(2.3, 0.35, 1.6), 0xa8814f); lid.position.y = 1.55; lid.rotation.x = -0.5; g.add(lid);
+    const gold = meshOf(new THREE.SphereGeometry(0.7, 10, 8), 0xffd94a); gold.position.y = 1.45; gold.scale.y = 0.5; g.add(gold);
+    const shine = emojiSprite('\u{2728}', 2.4); shine.position.y = 3.2; g.add(shine);
 
   } else if (key === 'nursery') {
     for (let i = 0; i < 7; i++) {
@@ -929,6 +968,42 @@ export function fireEvent(kind, runner) {
       say('this is not about me. excellent.', true);
     }
 
+  } else if (kind === 'dustdevil') {
+    // a small giddy tornado. it is not hostile, it is five years old.
+    const g = new THREE.Group();
+    for (let i = 0; i < 7; i++) {
+      const r = 0.4 + i * 0.28;
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.1 + i * 0.02, 5, 12),
+        new THREE.MeshBasicMaterial({ color: 0xe6d3a8, transparent: true, opacity: 0.5 - i * 0.04 }));
+      ring.rotation.x = Math.PI / 2; ring.position.y = 0.4 + i * 0.75;
+      g.add(ring);
+    }
+    const px = clamp(runner.x + 20 + Math.random() * 24, W.xMin, W.goalX - 12);
+    const p = addProp('dustdevil', g, px, clamp(4 + Math.random() * 14, -2, 22),
+      { life: 26, ang: Math.random() * 6.3, spun: 0, carried: [] });
+    // it has been collecting things
+    for (let i = 0; i < 2; i++) p.carried.push(rollItem(Math.random, Math.random() < 0.35));
+    toast('\u{1F32A} a dust devil, carrying somebody\'s things');
+
+  } else if (kind === 'surfschool') {
+    // a wobbling line of beginners crossing your path with foam boards
+    const g = new THREE.Group();
+    const boards = [];
+    for (let i = 0; i < 5; i++) {
+      const person = new THREE.Group();
+      const b = meshOf(new THREE.CapsuleGeometry(0.27, 0.62, 4, 8), [0x3ec4d4, 0xf06a8a, 0xffd166, 0x8fd45a, 0xc792ff][i]);
+      b.position.y = 0.95; person.add(b);
+      const h = meshOf(new THREE.SphereGeometry(0.25, 10, 8), 0xe8c9a4); h.position.y = 1.5; person.add(h);
+      const board = meshOf(new THREE.CapsuleGeometry(0.5, 1.9, 4, 8), 0xfdfdfa);
+      board.rotation.set(Math.PI / 2, 0, 0.3); board.scale.z = 0.28;
+      board.position.set(0.6, 1.0, 0); person.add(board);
+      person.position.set(i * 2.3, 0, (i % 2) * 0.9);
+      g.add(person); boards.push(person);
+    }
+    const px = clamp(runner.x + 26 + Math.random() * 22, W.xMin, W.goalX - 16);
+    addProp('surfschool', g, px, 20, { boards, life: 34, dropped: false });
+    toast('\u{1F3C4} surf school, crossing. slowly.');
+
   } else if (kind === 'fisherman') {
     const g = new THREE.Group();
     const body = meshOf(new THREE.CapsuleGeometry(0.3, 0.7, 4, 8), 0x6d8f5e); body.position.y = 1.0; g.add(body);
@@ -1000,7 +1075,8 @@ export function updateEvents(dt, runner) {
 
   if (S.t >= ev.nextAt) {
     const pool = [['cloud', 22], ['whale', 15], ['dolphins', 17], ['sealions', 15],
-                  ['sandcastle', 15], ['kite', 12], ['detector', 14], ['volleyball', 14]];
+                  ['sandcastle', 15], ['kite', 12], ['detector', 14], ['volleyball', 14],
+                  ['dustdevil', 13], ['surfschool', 11]];
     if (S.level >= 2) pool.push(['focus', 18], ['sneaker', 14], ['wedding', 11], ['fisherman', 12]);
     if (S.level >= 3) pool.push(['grunion', 8], ['lowtide', 12], ['civilwar', 10]);
     let tot = 0; for (const [, w] of pool) tot += w;
@@ -1128,6 +1204,57 @@ function updateProps(dt, runner) {
       }
       if (p.life <= 0) dropProp(p);
 
+    } else if (p.kind === 'dustdevil') {
+      p.life -= dt;
+      p.ang += (Math.random() - 0.5) * dt * 2;
+      p.x += Math.sin(p.ang) * 5.5 * dt;
+      p.z = clamp(p.z + Math.cos(p.ang) * 3 * dt, -2, 24);
+      p.x = clamp(p.x, W.xMin + 4, W.xMax - 4);
+      p.mesh.position.set(p.x, groundY(p.x, p.z), p.z);
+      p.mesh.rotation.y += dt * 7;
+      p.mesh.children.forEach((r, i) => { r.rotation.z = S.t * (2 + i * 0.4); });
+      if (Math.random() < dt * 12) {
+        particles.spawn(p.x + (Math.random() - 0.5) * 2.4, groundY(p.x, p.z) + Math.random() * 4,
+          p.z + (Math.random() - 0.5) * 2.4,
+          { color: 0xe6d3a8, size: 0.3, ttl: 0.7, vy: 2.2, opacity: 0.5 });
+      }
+      // get close and it hands over its haul, then spins you for your trouble
+      if (d < 3.2 && p.carried.length) {
+        const key = p.carried.pop();
+        dropItem(key, p.x + (Math.random() - 0.5) * 5, p.z + (Math.random() - 0.5) * 5);
+        toast('\u{1F32A} it drops something and giggles');
+        AU.poof();
+      }
+      if (d < 2 && S.t - (p.spun || 0) > 3) {
+        p.spun = S.t;
+        runner.trip('stumble', '\u{1F32A} SPUN');
+        S.feet.L = Math.min(100, S.feet.L + 6); S.feet.R = Math.min(100, S.feet.R + 6);
+        AU.noise(0.4, 1800, 0.06, true);
+        say('wheeeee — ow.', true);
+      }
+      if (p.life <= 0) dropProp(p);
+
+    } else if (p.kind === 'surfschool') {
+      p.life -= dt;
+      p.z -= 1.6 * dt;                                  // shuffling down to the water
+      p.mesh.position.set(p.x, groundY(p.x, p.z), p.z);
+      p.boards.forEach((b, i) => { b.rotation.z = Math.sin(S.t * 3 + i) * 0.1; });   // wobbling
+      if (!p.dropped && p.z < 6) {
+        p.dropped = true;
+        // the instructor's whistle. every bird looks up.
+        AU.tone(2100, 0.18, 'sine', 0.05); AU.tone(2400, 0.2, 'sine', 0.04, 0.16);
+        S.aggro = Math.min(100, S.aggro + 20);
+        toast('\u{1F3C4} the instructor blows the whistle — the birds heard that', 'bad');
+        // and somebody drops a board, which is a fine place to stand
+        const bx = p.x + 1, bz = p.z + 2;
+        const board = meshOf(new THREE.CapsuleGeometry(0.6, 2.2, 4, 8), 0xfdfdfa);
+        board.rotation.x = Math.PI / 2; board.scale.z = 0.3;
+        board.position.set(bx, groundY(bx, bz) + 0.25, bz);
+        levelGroup.add(board);
+        S.refuges.push({ x: bx, z: bz, r: 1.8, h: 0.4, type: 'board', mesh: board, crab: false, crabSprung: false });
+      }
+      if (p.life <= 0 || p.z < W.zMin) dropProp(p);
+
     } else if (p.kind === 'fisherman') {
       p.mesh.position.set(p.x, groundY(p.x, p.z), p.z);
       p.mesh.rotation.y = -Math.PI / 2 + Math.sin(S.t * 0.4) * 0.3;
@@ -1162,6 +1289,102 @@ function updateProps(dt, runner) {
 }
 
 // ============================================================
+// PIRATE'S TREASURE — half-buried, always off the sensible route
+// ============================================================
+function buildChest(x, z) {
+  const g = new THREE.Group();
+  const box = meshOf(new THREE.BoxGeometry(1.7, 1.0, 1.2), 0x7a5636);
+  box.position.y = 0.32; g.add(box);
+  const lid = meshOf(new THREE.BoxGeometry(1.8, 0.3, 1.3), 0x9a6f45);
+  lid.position.y = 0.9; g.add(lid);
+  const band = meshOf(new THREE.BoxGeometry(1.85, 0.16, 1.35), 0xd8b25a, { outline: false });
+  band.position.y = 0.55; g.add(band);
+  const sandpile = meshOf(new THREE.SphereGeometry(1.5, 10, 6), 0xe8cf9a);
+  sandpile.scale.set(1, 0.28, 1); sandpile.position.y = 0.1; g.add(sandpile);
+  const glint = emojiSprite('\u{2728}', 1.4); glint.position.y = 2.1; g.add(glint);
+  g.position.set(x, groundY(x, z), z);
+  levelGroup.add(g);
+  return { x, z, mesh: g, lid, opened: false };
+}
+/** Open it and take whatever's in there. Some of it is a mistake. */
+function openChest(ch, runner) {
+  ch.opened = true;
+  ch.lid.rotation.x = -1.5; ch.lid.position.set(0, 1.05, -0.72);
+  AU.fanfare();
+  bus.shake(0.6);
+  particles.burst(ch.x, groundY(ch.x, ch.z) + 1.2, ch.z, 22,
+    { color: 0xffd94a, size: 0.4, ttl: 1.1, vy: 2.6, spread: 2.6 });
+  S.stats.chests++;
+
+  const roll = Math.random();
+  if (roll < 0.24) {
+    grant('doubloons');
+    bus.banner('GOLD DOUBLOONS', 'rich, and considerably slower');
+    say('I am rich! I am so slow, but I am rich!', true);
+  } else if (roll < 0.44) {
+    grant('boots');
+    bus.banner("PIRATE'S BOOTS", 'the sand cannot reach you. everyone can hear you.');
+  } else if (roll < 0.60) {
+    grant('compass');
+    bus.banner('CURSED COMPASS', 'it is not wrong. it is mean.');
+    say('why would it point THERE.', true);
+  } else if (roll < 0.78) {
+    // an enormous crab lives here and is furious about the intrusion
+    spawnAngryCrab(ch.x, ch.z);
+    bus.banner('A CRAB', 'an enormous, furious crab');
+    say('AH! AH! THAT IS A BIG CRAB!', true);
+  } else {
+    grant('mapfrag');
+  }
+}
+function spawnAngryCrab(x, z) {
+  const g = new THREE.Group();
+  const body = meshOf(new THREE.SphereGeometry(0.8, 10, 8), 0xd9502f);
+  body.scale.set(1.25, 0.62, 1); body.position.y = 0.55; g.add(body);
+  for (const side of [-1, 1]) {
+    const claw = meshOf(new THREE.BoxGeometry(0.55, 0.34, 0.34), 0xe4633f);
+    claw.position.set(side * 1.15, 0.55, 0.5); g.add(claw);
+    for (let i = 0; i < 3; i++) {
+      const leg = meshOf(new THREE.CylinderGeometry(0.07, 0.05, 0.8, 4), 0xc4452a, { outline: false });
+      leg.rotation.z = side * 0.9; leg.position.set(side * 0.85, 0.3, -0.3 - i * 0.4); g.add(leg);
+    }
+  }
+  for (const side of [-1, 1]) {
+    const eye = meshOf(new THREE.SphereGeometry(0.13, 6, 6), 0x201a1a, { outline: false });
+    eye.position.set(side * 0.28, 1.0, 0.55); g.add(eye);
+  }
+  g.position.set(x, groundY(x, z), z);
+  levelGroup.add(g);
+  S.crabs.push({ x, z, mesh: g, t: 0, cool: 0 });
+  AU.crab();
+}
+function updateAngryCrabs(dt, runner) {
+  for (const c of S.crabs) {
+    c.t += dt;
+    const dx = runner.x - c.x, dz = runner.z - c.z;
+    const d = Math.hypot(dx, dz);
+    if (d > 1.2 && d < 42) {
+      const sp = 4.6;
+      c.x += dx / d * sp * dt;
+      c.z += dz / d * sp * dt;
+    }
+    // crabs go sideways, obviously
+    c.mesh.position.set(c.x, groundY(c.x, c.z) + Math.abs(Math.sin(c.t * 12)) * 0.12, c.z);
+    c.mesh.rotation.y = Math.atan2(dx, dz) + Math.PI / 2;
+    c.cool -= dt;
+    if (d < 1.9 && c.cool <= 0) {
+      c.cool = 1.6;
+      S.health -= 7;
+      const a = Math.atan2(-dx, -dz);
+      runner.kx += Math.sin(a) * 11; runner.kz += Math.cos(a) * 11;
+      runner.trip('stumble', '\u{1F980} THE CRAB HAS YOU');
+      AU.crab(); AU.thwack();
+      say('OW! OW! LET GO!', true);
+    }
+  }
+}
+
+// ============================================================
 // CHECKPOINTS — a long beach needs staging posts
 // ============================================================
 function buildCheckpoint(x, z, idx) {
@@ -1186,6 +1409,14 @@ function buildCheckpoint(x, z, idx) {
   // it also works as a refuge you can stand on
   S.refuges.push({ x, z, r: 4.2, h: 0.2, type: 'wood', mesh: g, crab: false, crabSprung: false, used: true });
   return { x, z, idx, mesh: g, taken: false };
+}
+export function checkChests(dt, runner) {
+  updateAngryCrabs(dt, runner);
+  for (const ch of S.chests) {
+    if (ch.opened) continue;
+    ch.mesh.children[4].position.y = 2.1 + Math.sin(S.t * 2) * 0.18;
+    if (Math.hypot(runner.x - ch.x, runner.z - ch.z) < 2.6) openChest(ch, runner);
+  }
 }
 export function checkCheckpoints(runner) {
   for (const cp of S.checkpoints) {
@@ -1222,6 +1453,7 @@ export function generateLevel(runner) {
   }
   S.ev = freshEvents(); S.ev.nextAt = S.t + 9;
   S.coolPads = []; S.guilt = 0; S.prophet = null;
+  S.chests = []; S.crabs = [];
   particles.clear(); prints.clear();
 
   S.seed = Math.floor(Math.random() * 90000) + 10000;
@@ -1238,13 +1470,15 @@ export function generateLevel(runner) {
   // ---- goal
   let gk = S.forceGoal;
   if (!gk) {
-    if (S.level === 1) gk = 'truck';
+    if (S.islandPending) { gk = 'island'; S.islandPending = false; S.isIsland = true; }
+    else if (S.level === 1) gk = 'truck';
     else if (rng() < 0.16) gk = 'nursery';
     else {
       const pool = ['truck', 'flipflops', 'shower', 'umbrella', 'tidepools'];
       gk = pool[Math.floor(rng() * pool.length)];
     }
   }
+  if (gk !== 'island') S.isIsland = false;
   const gz = GOALS[gk].z[0] + rng() * (GOALS[gk].z[1] - GOALS[gk].z[0]);
   S.goal = buildGoal(gk, W.goalX, gz);
 
@@ -1301,6 +1535,12 @@ export function generateLevel(runner) {
   }
   // a plover works this beach from level 3 on, running its little con
   if (S.level >= 3 && rng() < 0.55) spawnPlover(runner);
+
+  // ---- the chest: always well off the sensible line, out in the hot dunes
+  if (!S.isIsland && rng() < 0.45) {
+    const cx = lerp(W.startX, W.goalX, 0.2 + rng() * 0.6);
+    S.chests.push(buildChest(cx, 22 + rng() * 8));
+  }
 
   // the Wash Prophet stands apart from everything, somewhere along the way
   const px = lerp(W.startX, W.goalX, 0.25 + rng() * 0.5);
